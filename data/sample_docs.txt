@@ -1,0 +1,13 @@
+PostgreSQL and the PGVector Extension
+
+PGVector is an open-source extension for PostgreSQL that adds support for storing and searching vector embeddings directly inside the database. It introduces a new column type called vector, where each row holds a fixed-length array of floating point numbers. These vectors typically come from machine learning models that turn text, images, or audio into numerical representations of their meaning.
+
+The main use of PGVector is similarity search. Instead of matching exact keywords, it finds the rows whose vectors are closest to a query vector using distance metrics such as cosine distance, Euclidean (L2) distance, or inner product. PGVector supports approximate nearest neighbor indexes like HNSW and IVFFlat, which keep these searches fast even over large collections. Because the vectors live in PostgreSQL, you can combine vector search with ordinary SQL filters, joins, and transactions, and you do not need to run a separate dedicated vector database.
+
+Retrieval-Augmented Generation (RAG)
+
+Retrieval-Augmented Generation is a technique for making large language models answer questions using external, up-to-date, or private knowledge that was not part of their training data. A RAG system works in two phases. In the ingestion phase, source documents are split into smaller chunks, each chunk is converted into an embedding, and the embeddings are stored in a vector database together with the original text.
+
+In the query phase, the user's question is embedded with the same model, and the system retrieves the chunks whose embeddings are most similar to the question. Those retrieved chunks are inserted into the prompt as context, and the language model is instructed to answer using only that context and to cite its sources. This grounding reduces hallucinations, lets the model point to where information came from, and makes it possible to update the system's knowledge simply by re-ingesting documents instead of retraining the model.
+
+A relevance threshold is often applied to the similarity scores. If the closest chunk is still too far from the question, the system refuses to answer rather than forcing the model to guess, which keeps off-topic questions from producing confident but wrong answers.
