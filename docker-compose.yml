@@ -11,6 +11,26 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  app:
+    build: .
+    image: rag-app:latest
+    env_file: .env
+    environment:
+      # Reach Postgres over the compose network instead of localhost.
+      DB_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Keep stdin/tty open for the interactive CLI (docker compose run --rm app).
+    stdin_open: true
+    tty: true
 
 volumes:
   pgdata:

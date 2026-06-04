@@ -1,27 +1,26 @@
-.PHONY: help up down ps logs init ingest ask test compile restart clean install install-dev
+.PHONY: help up down ps logs init ingest ask test compile restart clean install install-dev \
+        docker-build docker-up docker-ingest docker-ask docker-down
 
 PY := .venv/bin/python
 
 help:
-	@echo "Mini-RAG — daily commands"
+	@echo "Mini-RAG"
 	@echo ""
-	@echo "  make install      Create venv (uv) and install prod dependencies"
-	@echo "  make install-dev  Same as install, plus pytest"
+	@echo "Run everything in Docker (no local Python needed):"
+	@echo "  make docker-up      Build the image, start Postgres, seed the schema and data"
+	@echo "  make docker-ask     Open the interactive RAG demo inside the container"
+	@echo "  make docker-ingest  Re-run ingestion inside the container"
+	@echo "  make docker-down    Stop everything"
 	@echo ""
-	@echo "  make up           Start the Postgres + PGVector container (waits until ready)"
-	@echo "  make down         Stop the container (data is kept on the volume)"
-	@echo "  make ps           Show container status"
-	@echo "  make logs         Tail the container logs"
-	@echo "  make restart      Restart the container"
+	@echo "Local workflow (Python via uv, Postgres in Docker):"
+	@echo "  make install-dev    Create venv (uv) and install deps + pytest"
+	@echo "  make up             Start the Postgres container (waits until ready)"
+	@echo "  make ingest         Embed and index data/sample_docs.txt"
+	@echo "  make ask            Run the interactive RAG demo"
+	@echo "  make test           Run the pytest suite (no API calls)"
 	@echo ""
-	@echo "  make init         Initialize the DB schema"
-	@echo "  make ingest       Embed and index data/sample_docs.txt"
-	@echo "  make ask          Run the interactive RAG demo"
-	@echo ""
-	@echo "  make test         Run the pytest suite (no API calls)"
-	@echo "  make compile      Verify all src/ modules import cleanly"
-	@echo ""
-	@echo "  make clean        Stop AND drop the data volume (LOSES INGESTED CHUNKS)"
+	@echo "  make down           Stop the container (keeps the data volume)"
+	@echo "  make clean          Stop AND drop the data volume (loses ingested chunks)"
 
 install:
 	uv venv --python 3.12
@@ -32,7 +31,7 @@ install-dev:
 	uv pip install -r requirements-dev.txt
 
 up:
-	docker compose up -d
+	docker compose up -d postgres
 	@until docker compose exec -T postgres pg_isready -U rag_user -d rag_db >/dev/null 2>&1; do sleep 1; done
 	@echo "Postgres ready on localhost:5432"
 
@@ -65,3 +64,23 @@ compile:
 
 clean:
 	docker compose down -v
+
+# --- Fully containerized workflow ---
+
+docker-build:
+	docker compose build
+
+docker-up: docker-build
+	docker compose up -d postgres
+	@until docker compose exec -T postgres pg_isready -U rag_user -d rag_db >/dev/null 2>&1; do sleep 1; done
+	docker compose run --rm app python -m src.ingest
+	@echo "Stack ready. Run 'make docker-ask' to query it."
+
+docker-ingest:
+	docker compose run --rm app python -m src.ingest
+
+docker-ask:
+	docker compose run --rm app python -m src.main
+
+docker-down:
+	docker compose down
