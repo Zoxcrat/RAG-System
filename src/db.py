@@ -1,20 +1,17 @@
-import os
-
 import psycopg2
-from dotenv import load_dotenv
 
-load_dotenv()
+from src import config
 
-EMBEDDING_DIM = 1536
+EMBEDDING_DIM = config.EMBEDDING_DIM
 
 
 def get_connection():
     return psycopg2.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        port=int(os.getenv("DB_PORT", "5432")),
-        dbname=os.getenv("DB_NAME", "postgres"),
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD", "test"),
+        host=config.DB_HOST,
+        port=config.DB_PORT,
+        dbname=config.DB_NAME,
+        user=config.DB_USER,
+        password=config.DB_PASSWORD,
     )
 
 

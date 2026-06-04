@@ -1,18 +1,16 @@
 from typing import Optional
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
+from src import config
 from src.db import get_connection
 from src.retrieve import retrieve
 
-load_dotenv()
-
-LLM_MODEL = "gpt-4o-mini"
-DEFAULT_TOP_K = 5
-TEMPERATURE = 0
-MAX_TOKENS = 800
-RELEVANCE_THRESHOLD = 0.5
+LLM_MODEL = config.LLM_MODEL
+DEFAULT_TOP_K = config.DEFAULT_TOP_K
+TEMPERATURE = config.TEMPERATURE
+MAX_TOKENS = config.MAX_TOKENS
+RELEVANCE_THRESHOLD = config.RELEVANCE_THRESHOLD
 
 _client: Optional[OpenAI] = None
 
@@ -20,7 +18,10 @@ _client: Optional[OpenAI] = None
 def _get_client() -> OpenAI:
     global _client
     if _client is None:
-        _client = OpenAI()
+        _client = OpenAI(
+            max_retries=config.OPENAI_MAX_RETRIES,
+            timeout=config.OPENAI_TIMEOUT,
+        )
     return _client
 
 

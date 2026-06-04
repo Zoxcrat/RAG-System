@@ -1,11 +1,10 @@
 from typing import Optional
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
-load_dotenv()
+from src import config
 
-EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_MODEL = config.EMBEDDING_MODEL
 
 _client: Optional[OpenAI] = None
 
@@ -13,7 +12,10 @@ _client: Optional[OpenAI] = None
 def _get_client() -> OpenAI:
     global _client
     if _client is None:
-        _client = OpenAI()
+        _client = OpenAI(
+            max_retries=config.OPENAI_MAX_RETRIES,
+            timeout=config.OPENAI_TIMEOUT,
+        )
     return _client
 
 
