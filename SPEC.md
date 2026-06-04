@@ -31,7 +31,7 @@ Docker), OpenAI API for embeddings and generation, `psycopg2`, `python-dotenv`.
 
 ## 2. Architecture
 
-Six modules in `src/`, each with a single responsibility. Dependencies flow in a
+Seven modules in `src/`, each with a single responsibility. Dependencies flow in a
 single direction (no cycles):
 
 ```
@@ -39,11 +39,14 @@ main ──► rag ──► retrieve ──► embed ──► (OpenAI API)
   │       │          │
   │       └──────────┴────► db ──► (PostgreSQL + PGVector)
   └────► ingest ──► embed, db
+
+db, embed, ingest, rag ──► config ──► (environment / .env)
 ```
 
 | Module | Responsibility |
 |---|---|
-| `db` | PostgreSQL connection and schema management (`vector` extension, `documents` table, HNSW index). Does not know about embeddings or the LLM. |
+| `config` | Single source of truth for environment configuration. The only module that reads `os.getenv`. |
+| `db` | PostgreSQL connection and schema management (`vector` extension, `documents` table, HNSW index, content-hash unique index). Does not know about embeddings or the LLM. |
 | `embed` | Convert text into vectors via OpenAI. The only point that calls the embeddings endpoint. |
 | `ingest` | Offline pipeline: read file → chunking with overlap → batch embeddings → INSERT into `documents`. |
 | `retrieve` | Search pipeline: embed the query → k-NN by cosine distance in PGVector → return chunks with metadata and distance. |
@@ -58,10 +61,11 @@ main ──► rag ──► retrieve ──► embed ──► (OpenAI API)
 | `content` | `TEXT NOT NULL` | original text chunk |
 | `source` | `TEXT` | name of the source document |
 | `chunk_index` | `INTEGER` | position of the chunk within the document |
+| `content_hash` | `TEXT` | SHA-256 of `content`; unique, used for idempotent ingestion |
 | `embedding` | `vector(1536)` | embedding of the chunk |
 | `created_at` | `TIMESTAMP DEFAULT NOW()` | |
 
-Index: HNSW over `embedding` using `vector_cosine_ops`.
+Indexes: HNSW over `embedding` using `vector_cosine_ops`; UNIQUE over `content_hash`.
 
 ---
 
@@ -70,17 +74,18 @@ Index: HNSW over `embedding` using `vector_cosine_ops`.
 ### `db`
 ```python
 get_connection() -> connection
-# psycopg2 connection. Config from env vars (DB_HOST, DB_PORT, DB_NAME,
-# DB_USER, DB_PASSWORD) with defaults for local development.
+# psycopg2 connection. Reads DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD from
+# src.config, whose defaults match docker-compose.
 
 init_schema(conn) -> None
-# Idempotent: CREATE EXTENSION IF NOT EXISTS vector; creates documents table
-# (IF NOT EXISTS) and HNSW index (IF NOT EXISTS). Commits.
+# Idempotent: CREATE EXTENSION IF NOT EXISTS vector; creates documents table,
+# HNSW index, and the content_hash UNIQUE index (all IF NOT EXISTS). Adds the
+# content_hash column to pre-existing tables (ADD COLUMN IF NOT EXISTS). Commits.
 
 reset_db(conn) -> None
 # DROP TABLE documents and recreates the schema. Destructive (deletes data).
 
-EMBEDDING_DIM = 1536
+EMBEDDING_DIM = 1536  # from src.config
 ```
 
 ### `embed`
@@ -101,8 +106,9 @@ chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]
 # Empty text -> [].
 
 ingest_file(conn, path: str) -> int
-# Reads the file, chunks it, embeds in batch and inserts each chunk with its
-# source (basename) and chunk_index. Returns the number of chunks inserted.
+# Reads the file, chunks it, embeds in batch and batch-inserts each chunk with its
+# source (basename), chunk_index and content_hash, using ON CONFLICT DO NOTHING.
+# Idempotent. Returns the number of NEW rows inserted (0 on a repeat run).
 ```
 
 ### `retrieve`
@@ -164,7 +170,7 @@ run_demo() -> None
 
 **`db`**
 - `get_connection()` opens a connection using env vars with defaults; the port is cast to `int`.
-- `init_schema(conn)` is idempotent: running it N times does not fail nor duplicate objects. It leaves the `vector` extension, the `documents` table with the 6 specified columns, and the HNSW index with `vector_cosine_ops` created.
+- `init_schema(conn)` is idempotent: running it N times does not fail nor duplicate objects. It leaves the `vector` extension, the `documents` table with the 7 specified columns, the HNSW index with `vector_cosine_ops`, and the `content_hash` UNIQUE index created.
 - `reset_db(conn)` leaves the table empty and with the schema recreated.
 
 **`embed`**
@@ -173,7 +179,7 @@ run_demo() -> None
 
 **`ingest`**
 - `chunk_text` produces chunks of at most `chunk_size`, with overlap of `overlap` between consecutive ones; empty text → `[]`; does not generate empty chunks.
-- `ingest_file` persists one record per chunk with `content`, `source` (basename of the path) and consecutive `chunk_index` starting at 0, and its `embedding`. Returns the number of chunks inserted.
+- `ingest_file` persists one record per chunk with `content`, `source` (basename of the path), consecutive `chunk_index` starting at 0, `content_hash`, and its `embedding`. Insertion is batched and idempotent (`ON CONFLICT (content_hash) DO NOTHING`); it returns the number of newly inserted rows (0 when re-ingesting an unchanged document).
 
 **`retrieve`**
 - Returns at most `top_k` results, **ordered by ascending cosine distance** (most relevant first).

@@ -108,7 +108,7 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
 
 
 if __name__ == "__main__":
-    # Ajusta las 2 primeras para que coincidan con el contenido de tus sample_docs.
+    # The first two match the sample docs; the third is off-topic on purpose.
     queries = [
         "What is PGVector and what is it used for?",
         "How does retrieval-augmented generation work?",
