@@ -1,0 +1,140 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-header {
+  padding: 12px 20px;
+  background: #1f2937;
+  color: #fff;
+}
+.app-header h1 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.app-header p {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* --- PDF viewer (left) --- */
+.viewer-pane {
+  flex: 1;
+  overflow: auto;
+  background: #525659;
+  border-right: 1px solid #ddd;
+}
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+}
+.pdf-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: #fff;
+  margin-bottom: 10px;
+}
+.pdf-toolbar button {
+  cursor: pointer;
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 10px;
+  background: #374151;
+  color: #fff;
+}
+.pdf-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pdf-page-label {
+  font-size: 0.9rem;
+}
+.pdf-canvas {
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+.pdf-status {
+  padding: 40px;
+  color: #fff;
+}
+
+/* --- Q&A panel (right) --- */
+.qa-pane {
+  width: 420px;
+  overflow: auto;
+  padding: 16px;
+  background: #fff;
+}
+.ask-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ask-form textarea {
+  font: inherit;
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  resize: vertical;
+}
+.ask-form button {
+  align-self: flex-start;
+  cursor: pointer;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 16px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+.ask-form button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.error {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.9rem;
+}
+
+.answer {
+  margin-top: 18px;
+}
+.answer h3 {
+  margin: 0 0 6px;
+}
+.answer-text {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.pages {
+  font-size: 0.9rem;
+  color: #374151;
+}
+.sources {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+.sources h4 {
+  margin: 0 0 4px;
+}
+.sources ul {
+  margin: 0;
+  padding-left: 18px;
+}
