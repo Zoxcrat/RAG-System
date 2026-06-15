@@ -155,3 +155,49 @@
   background: #bfdbfe;
   text-decoration: underline;
 }
+/* the citation whose page is currently shown in the viewer */
+.citation-active {
+  background: #2563eb;
+  color: #fff;
+}
+.citation-active:hover {
+  background: #1d4ed8;
+}
+
+/* go-to-page input in the viewer toolbar */
+.pdf-goto {
+  margin: 0;
+}
+.pdf-goto input {
+  width: 72px;
+  padding: 3px 6px;
+  border: 1px solid #6b7280;
+  border-radius: 4px;
+  background: #374151;
+  color: #fff;
+  font: inherit;
+}
+.pdf-goto input::placeholder {
+  color: #cbd5e1;
+}
+
+/* ask actions, hints, loading */
+.ask-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hint-inline {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+.hint {
+  margin-top: 16px;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+.loading {
+  margin-top: 14px;
+  color: #2563eb;
+  font-size: 0.9rem;
+}

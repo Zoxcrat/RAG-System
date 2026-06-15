@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -18,8 +18,16 @@ interface Props {
 
 export function PdfViewer({ page, onPageChange }: Props) {
   const [numPages, setNumPages] = useState<number | null>(null);
+  const [goto, setGoto] = useState('');
 
   const clamp = (p: number) => Math.min(Math.max(1, p), numPages ?? p);
+
+  function handleGoto(e: FormEvent) {
+    e.preventDefault();
+    const n = parseInt(goto, 10);
+    if (!Number.isNaN(n)) onPageChange(clamp(n));
+    setGoto('');
+  }
 
   return (
     <div className="pdf-viewer">
@@ -37,6 +45,17 @@ export function PdfViewer({ page, onPageChange }: Props) {
         >
           Next ›
         </button>
+        <form className="pdf-goto" onSubmit={handleGoto}>
+          <input
+            type="number"
+            min={1}
+            max={numPages ?? undefined}
+            value={goto}
+            onChange={(e) => setGoto(e.target.value)}
+            placeholder="Go to…"
+            aria-label="Go to page"
+          />
+        </form>
       </div>
 
       <div className="pdf-canvas">

@@ -1,22 +1,21 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type KeyboardEvent } from 'react';
 import { ask } from '../api';
 import { parseAnswer } from '../citations';
 import { AnswerText } from './AnswerText';
 import type { AskResponse } from '../types';
 
 interface Props {
-  // Jump the PDF viewer to a page (used by the initial answer and citation clicks).
   onGoToPage: (page: number) => void;
+  currentPage: number;
 }
 
-export function AskPanel({ onGoToPage }: Props) {
+export function AskPanel({ onGoToPage, currentPage }: Props) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function submitQuery() {
     const q = query.trim();
     if (!q || loading) return;
 
@@ -36,26 +35,47 @@ export function AskPanel({ onGoToPage }: Props) {
     }
   }
 
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    void submitQuery();
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    // Cmd/Ctrl+Enter submits; plain Enter keeps inserting newlines.
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      void submitQuery();
+    }
+  }
+
   return (
     <div className="ask-panel">
       <form onSubmit={handleSubmit} className="ask-form">
         <textarea
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Ask about the parts catalog…"
           rows={3}
         />
-        <button type="submit" disabled={loading || !query.trim()}>
-          {loading ? 'Asking…' : 'Ask'}
-        </button>
+        <div className="ask-actions">
+          <button type="submit" disabled={loading || !query.trim()}>
+            {loading ? 'Asking…' : 'Ask'}
+          </button>
+          <span className="hint-inline">⌘/Ctrl + Enter</span>
+        </div>
       </form>
 
+      {loading && <div className="loading">Searching the catalog…</div>}
       {error && <div className="error">{error}</div>}
+      {!result && !error && !loading && (
+        <p className="hint">Ask a question about the catalog to get started.</p>
+      )}
 
       {result && (
         <div className="answer">
           <h3>Answer</h3>
-          <AnswerText answer={result.answer} onCite={onGoToPage} />
+          <AnswerText answer={result.answer} onCite={onGoToPage} activePage={currentPage} />
 
           {result.pages.length > 0 && (
             <p className="pages">Pages: {result.pages.join(', ')}</p>
