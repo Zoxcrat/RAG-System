@@ -1,14 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { ask } from '../api';
+import { parseAnswer } from '../citations';
+import { AnswerText } from './AnswerText';
 import type { AskResponse } from '../types';
 
 interface Props {
-  // Etapa 6 will use this to make citations jump the viewer; for now we jump to
-  // the first source page when an answer arrives.
-  onPagesFound?: (pages: number[]) => void;
+  // Jump the PDF viewer to a page (used by the initial answer and citation clicks).
+  onGoToPage: (page: number) => void;
 }
 
-export function AskPanel({ onPagesFound }: Props) {
+export function AskPanel({ onGoToPage }: Props) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AskResponse | null>(null);
@@ -24,7 +25,9 @@ export function AskPanel({ onPagesFound }: Props) {
     try {
       const res = await ask(q);
       setResult(res);
-      onPagesFound?.(res.pages);
+      // Jump to the first page the answer actually cites, if any.
+      const firstCitation = parseAnswer(res.answer).find((s) => s.type === 'citation');
+      if (firstCitation?.type === 'citation') onGoToPage(firstCitation.page);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
       setResult(null);
@@ -52,7 +55,7 @@ export function AskPanel({ onPagesFound }: Props) {
       {result && (
         <div className="answer">
           <h3>Answer</h3>
-          <p className="answer-text">{result.answer}</p>
+          <AnswerText answer={result.answer} onCite={onGoToPage} />
 
           {result.pages.length > 0 && (
             <p className="pages">Pages: {result.pages.join(', ')}</p>

@@ -138,3 +138,20 @@
   margin: 0;
   padding-left: 18px;
 }
+
+/* clickable page citations inside the answer */
+.citation {
+  border: 0;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 4px;
+  padding: 0 4px;
+  margin: 0 1px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+.citation:hover {
+  background: #bfdbfe;
+  text-decoration: underline;
+}

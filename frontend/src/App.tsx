@@ -18,7 +18,7 @@ export default function App() {
           <PdfViewer page={page} onPageChange={setPage} />
         </section>
         <section className="qa-pane">
-          <AskPanel onPagesFound={(pages) => pages[0] && setPage(pages[0])} />
+          <AskPanel onGoToPage={setPage} />
         </section>
       </main>
     </div>
