@@ -1,7 +1,8 @@
-.PHONY: help up down ps logs init ingest ask test compile restart clean install install-dev \
-        docker-build docker-up docker-ingest docker-ask docker-down
+.PHONY: help up down ps logs init ingest ask test compile restart clean install install-dev ocr \
+        docker-build docker-up docker-ingest docker-ask docker-down docker-ocr
 
 PY := .venv/bin/python
+PDF ?= data/Cessna 172 Parts Catalog (1963-1974).pdf
 
 help:
 	@echo "Mini-RAG"
@@ -10,6 +11,7 @@ help:
 	@echo "  make docker-up      Build the image, start Postgres, seed the schema and data"
 	@echo "  make docker-ask     Open the interactive RAG demo inside the container"
 	@echo "  make docker-ingest  Re-run ingestion inside the container"
+	@echo "  make docker-ocr     OCR the first pages of a PDF in the container (PDF=path)"
 	@echo "  make docker-down    Stop everything"
 	@echo ""
 	@echo "Local workflow (Python via uv, Postgres in Docker):"
@@ -18,6 +20,7 @@ help:
 	@echo "  make ingest         Embed and index data/sample_docs.txt"
 	@echo "  make ask            Run the interactive RAG demo"
 	@echo "  make test           Run the pytest suite (no API calls)"
+	@echo "  make ocr            OCR a PDF locally (needs tesseract; PDF=path)"
 	@echo ""
 	@echo "  make down           Stop the container (keeps the data volume)"
 	@echo "  make clean          Stop AND drop the data volume (loses ingested chunks)"
@@ -84,3 +87,12 @@ docker-ask:
 
 docker-down:
 	docker compose down
+
+# --- OCR / PDF extraction (step 1 of the technical-PDF pipeline) ---
+
+# Override PDF to point at another file, e.g. `make docker-ocr PDF=data/other.pdf`.
+ocr:
+	$(PY) -m src.pdf_loader "$(PDF)"
+
+docker-ocr: docker-build
+	docker compose run --rm --no-deps --entrypoint python app -m src.pdf_loader "$(PDF)"

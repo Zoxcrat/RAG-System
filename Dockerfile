@@ -5,6 +5,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# System dependencies. Tesseract is the OCR engine used by src/pdf_loader.py to
+# read the scanned catalog; baking it into the image keeps OCR reproducible
+# instead of depending on what's installed on the host. The English language
+# pack ships with the tesseract-ocr package. Clean apt lists to keep it small.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies first so this layer is cached across code changes.
 # psycopg2-binary ships wheels, so no build toolchain is needed.
 COPY requirements.txt .
