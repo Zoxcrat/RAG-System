@@ -4,7 +4,7 @@
 > Claude Code lo consulta al inicio de cada etapa para saber dónde estamos y qué
 > falta, y lo actualiza al completar cada una.
 >
-> **Última actualización:** 2026-06-15
+> **Última actualización:** 2026-06-15 · **Estado general: 7/7 etapas completadas** ✅
 
 ---
 
@@ -166,11 +166,19 @@
 
 ### ETAPA 7 — Pulido y robustez
 - **Objetivo:** manejo de errores, loading states, que se vea prolijo.
-- **Archivos que toca:** `frontend/` y `src/api.py` (mensajes de error,
-  estados de carga, estilos).
-- **Estado:** ⬜ PENDIENTE
-- **Notas:** estados de loading/empty/error, feedback claro al usuario,
-  prolijidad visual para la demo en vivo.
+- **Archivos que toca:** `frontend/src/App.tsx`, `components/AskPanel.tsx`,
+  `components/AnswerText.tsx`, `components/PdfViewer.tsx`, `App.css`.
+- **Estado:** ✅ **COMPLETADA (2026-06-15)**
+- **Notas:**
+  - Estados: loading ("Searching…"), empty (hint inicial), error prolijo.
+  - UX: enviar con ⌘/Ctrl+Enter, input "ir a página", y la cita de la página
+    actual queda resaltada (`citation-active`).
+  - **Code-split:** el visor se carga con `lazy`/`Suspense` → el bundle inicial
+    bajó de **522 kB → 148 kB** (pdfjs queda en un chunk aparte). Sin warning.
+  - **Vulnerabilidades npm:** las 6 son de **dev-deps** (vite/vitest), no de
+    runtime; el fix safe no aplica y `--force` sube majors (riesgo de romper) →
+    documentadas, no afectan lo que se sirve.
+  - **Verificado:** `npm run build` OK (chunks separados) + 6 tests (vitest).
 
 ---
 
