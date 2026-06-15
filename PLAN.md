@@ -90,13 +90,21 @@
 ### ETAPA 3 — Retrieval y generación con citas de página
 - **Objetivo:** el retrieval devuelve `page_number`; la generación cita
   `[página X]` y devuelve las páginas usadas.
-- **Archivos que toca:** `src/retrieve.py` (incluir `page_number` en los
-  resultados), `src/rag.py` (prompt que cita por página + `pages` usadas en la
-  respuesta).
-- **Estado:** ⬜ PENDIENTE
-- **Notas:** ajustar el `<context>` para exponer la página de cada chunk e
-  instruir a citar `[página X]`. La respuesta debe devolver, además del texto, la
-  lista de páginas citadas (insumo del salto en el visor).
+- **Archivos que toca:** `src/retrieve.py`, `src/rag.py`, `src/main.py`
+  (presentación), `tests/test_retrieve.py`, `tests/test_rag_citations.py`.
+- **Estado:** ✅ **COMPLETADA (2026-06-15)**
+- **Notas:**
+  - `retrieve.py`: el `SELECT` ahora trae `page_number` y cada resultado lo
+    incluye (puede ser `None` para texto plano).
+  - `rag.py`: `build_prompt` expone `page="N"` por chunk e instruye a citar en el
+    formato exacto `[página N]` (parseable por el frontend). `ask` agrega
+    `page_number` a cada `source` y un campo `pages` = páginas únicas y ordenadas
+    de los chunks recuperados (las que fundamentan la respuesta; las realmente
+    citadas se parsean del texto `[página N]`).
+  - `main.py`: la CLI muestra la página en cada fuente y la lista `pages`.
+  - **Verificado:** 32 tests passing (6 nuevos + `test_retrieve` actualizado;
+    mockeados, sin DB/API).
+  - *Pendiente:* corrida real end-to-end (necesita `OPENAI_API_KEY`).
 
 ### ETAPA 4 — Backend API REST (FastAPI)
 - **Objetivo:** endpoints de health y de pregunta (query → respuesta + citas +
