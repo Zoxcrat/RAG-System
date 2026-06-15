@@ -5,3 +5,10 @@ venv/
 .venv/
 .pytest_cache/
 .DS_Store
+
+# Large scanned source PDFs live in data/ but stay out of git to keep the repo
+# and pushes lean. The Docker build still bakes whatever PDF is present locally.
+data/*.pdf
+
+# Personal project notes / Claude guidance — kept local, not versioned.
+CLAUDE.md
