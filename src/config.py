@@ -46,3 +46,9 @@ RELEVANCE_THRESHOLD = _get_float("RELEVANCE_THRESHOLD", 0.5)
 # --- Ingestion ---
 CHUNK_SIZE = _get_int("CHUNK_SIZE", 500)
 CHUNK_OVERLAP = _get_int("CHUNK_OVERLAP", 100)
+
+# --- API ---
+# Path to the PDF served to the frontend viewer (GET /pdf).
+PDF_PATH = os.getenv("PDF_PATH", "data/Cessna 172 Parts Catalog (1963-1974).pdf")
+# Comma-separated allowed CORS origins; "*" (default) is fine for local dev.
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]

@@ -25,5 +25,9 @@ COPY data/ ./data/
 COPY docker/entrypoint.sh ./docker/entrypoint.sh
 RUN chmod +x ./docker/entrypoint.sh
 
+# Default command is the CLI; the api service (docker-compose) overrides it with
+# uvicorn and serves HTTP on this port.
+EXPOSE 8000
+
 ENTRYPOINT ["./docker/entrypoint.sh"]
 CMD ["python", "-m", "src.main"]
