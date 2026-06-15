@@ -32,17 +32,19 @@ def build_prompt(query: str, chunks: list[dict]) -> tuple[str, str]:
         "1. Use only information found in the context. Do not rely on prior knowledge.\n"
         "2. If the context does not contain enough information to answer, say so "
         "explicitly and state that you don't have enough information.\n"
-        "3. Cite the chunks you use with bracketed numbers like [1], [2], matching "
-        "the chunk ids given in the context.\n"
-        "4. Never invent facts, sources, or citations."
+        "3. Cite the page(s) you use with bracketed page numbers in the exact "
+        "format [página N], where N is the page shown for the chunk you used "
+        "(for example [página 42]). If several chunks share a page, cite it once.\n"
+        "4. Never invent facts, pages, or citations."
     )
 
     lines: list[str] = ["<context>"]
-    for i, chunk in enumerate(chunks, start=1):
+    for chunk in chunks:
         source = chunk.get("source", "unknown")
-        chunk_index = chunk.get("chunk_index", "")
+        page = chunk.get("page_number")
+        page_str = str(page) if page is not None else "n/a"
         content = chunk.get("content", "")
-        lines.append(f'<chunk id="{i}" source="{source}" chunk_index="{chunk_index}">')
+        lines.append(f'<chunk page="{page_str}" source="{source}">')
         lines.append(content)
         lines.append("</chunk>")
     lines.append("</context>")
@@ -56,6 +58,18 @@ def _min_distance(chunks: list[dict]) -> Optional[float]:
     if not chunks:
         return None
     return min(chunk["distance"] for chunk in chunks)
+
+
+def _pages_used(chunks: list[dict]) -> list[int]:
+    """Unique, sorted page numbers of the retrieved chunks that ground the answer.
+
+    These are the pages offered as context (NULL pages from plain-text docs are
+    skipped). The exact pages the model cites are parsed from the answer text
+    (the [página N] tokens) by the caller / frontend.
+    """
+    return sorted(
+        {chunk["page_number"] for chunk in chunks if chunk.get("page_number") is not None}
+    )
 
 
 def generate_answer(query: str, chunks: list[dict]) -> str:
@@ -94,6 +108,7 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
             "id": i,
             "source": chunk.get("source"),
             "chunk_index": chunk.get("chunk_index"),
+            "page_number": chunk.get("page_number"),
             "distance": chunk.get("distance"),
         }
         for i, chunk in enumerate(chunks, start=1)
@@ -103,6 +118,7 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
         "query": query,
         "answer": answer,
         "sources": sources,
+        "pages": _pages_used(chunks),
         "min_distance": _min_distance(chunks),
     }
 
@@ -126,12 +142,16 @@ if __name__ == "__main__":
             print("-" * 70)
             md = result["min_distance"]
             print(f"min_distance: {md:.4f}" if md is not None else "min_distance: n/a")
+            if result["pages"]:
+                print(f"pages: {', '.join(str(p) for p in result['pages'])}")
             print("sources:")
             for s in result["sources"]:
                 dist = s["distance"]
                 dist_str = f"{dist:.4f}" if dist is not None else "n/a"
+                page = s["page_number"]
+                page_str = f"p.{page}" if page is not None else "p.n/a"
                 print(
-                    f"  [{s['id']}] {s['source']} (chunk {s['chunk_index']}) "
+                    f"  [{s['id']}] {s['source']} ({page_str}, chunk {s['chunk_index']}) "
                     f"distance={dist_str}"
                 )
         print("=" * 70)

@@ -15,7 +15,7 @@ def retrieve(conn, query: str, top_k: int = DEFAULT_TOP_K) -> list[dict]:
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, content, source, chunk_index,
+            SELECT id, content, source, chunk_index, page_number,
                    embedding <=> %s::vector AS distance
             FROM documents
             ORDER BY distance
@@ -31,7 +31,8 @@ def retrieve(conn, query: str, top_k: int = DEFAULT_TOP_K) -> list[dict]:
             "content": row[1],
             "source": row[2],
             "chunk_index": row[3],
-            "distance": float(row[4]),
+            "page_number": row[4],
+            "distance": float(row[5]),
         }
         for row in rows
     ]
@@ -42,6 +43,11 @@ if __name__ == "__main__":
     try:
         results = retrieve(conn, "What is PGVector?", top_k=3)
         for r in results:
-            print(f"[{r['distance']:.4f}] {r['source']} #{r['chunk_index']}: {r['content'][:80]}...")
+            page = r["page_number"]
+            page_str = f"p.{page}" if page is not None else "p.n/a"
+            print(
+                f"[{r['distance']:.4f}] {r['source']} ({page_str} #{r['chunk_index']}): "
+                f"{r['content'][:80]}..."
+            )
     finally:
         conn.close()

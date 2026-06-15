@@ -11,13 +11,17 @@ def _print_result(result: dict) -> None:
     print("-" * 70)
     md = result["min_distance"]
     print(f"min_distance: {md:.4f}" if md is not None else "min_distance: n/a")
+    if result.get("pages"):
+        print(f"pages: {', '.join(str(p) for p in result['pages'])}")
     if result["sources"]:
         print("sources:")
         for s in result["sources"]:
             dist = s["distance"]
             dist_str = f"{dist:.4f}" if dist is not None else "n/a"
+            page = s.get("page_number")
+            page_str = f"p.{page}" if page is not None else "p.n/a"
             print(
-                f"  [{s['id']}] {s['source']} (chunk {s['chunk_index']}) "
+                f"  [{s['id']}] {s['source']} ({page_str}, chunk {s['chunk_index']}) "
                 f"distance={dist_str}"
             )
     print()
