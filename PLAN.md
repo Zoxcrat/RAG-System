@@ -109,13 +109,23 @@
 ### ETAPA 4 — Backend API REST (FastAPI)
 - **Objetivo:** endpoints de health y de pregunta (query → respuesta + citas +
   chunks fuente). Servir el PDF. CORS para desarrollo local.
-- **Archivos que toca:** nuevo `src/api.py` (FastAPI), `requirements.txt`
-  (fastapi, uvicorn), `Dockerfile`/`docker-compose.yml` (servicio API + puerto),
-  endpoint estático para el PDF.
-- **Estado:** ⬜ PENDIENTE
-- **Notas:** `GET /health`; `POST /ask` (devuelve answer + citas con
-  `page_number` + chunks fuente); `GET /pdf` (sirve el PDF para el visor). CORS
-  habilitado para el front en local.
+- **Archivos que toca:** `src/api.py` (nuevo), `src/config.py` (`PDF_PATH`,
+  `CORS_ORIGINS`), `requirements.txt` (fastapi, uvicorn), `requirements-dev.txt`
+  (httpx), `Dockerfile` (EXPOSE), `docker-compose.yml` (servicio `api`),
+  `Makefile`, `tests/test_api.py`.
+- **Estado:** ✅ **COMPLETADA (2026-06-15)**
+- **Notas:**
+  - `GET /health` → `{"status": "ok"}`; `POST /ask` (`{query, top_k?}` →
+    `{answer, sources[...page_number], pages, min_distance}`, validado con
+    Pydantic); `GET /pdf` (sirve el PDF con `FileResponse`).
+  - CORS habilitado (configurable por `CORS_ORIGINS`, default `*` para dev).
+  - Conexión a Postgres **por request** (dependency `get_db` con `yield`); un
+    pool sería el próximo paso para más concurrencia.
+  - Servicio `api` en docker-compose (reusa la imagen, `command` → uvicorn,
+    puerto 8000). Targets `make api` (local) / `make docker-api`.
+  - **Verificado:** 40 tests passing (8 de API con `TestClient`, mockeados) +
+    smoke test del contenedor (`/health`, `/pdf`).
+  - *Pendiente:* `/ask` real necesita `OPENAI_API_KEY` (embeddings + LLM).
 
 ### ETAPA 5 — Frontend React con visor PDF
 - **Objetivo:** visor PDF.js, input de pregunta, área de respuesta, conexión con
