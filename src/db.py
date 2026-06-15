@@ -25,6 +25,7 @@ def init_schema(conn):
                 content TEXT NOT NULL,
                 source TEXT,
                 chunk_index INTEGER,
+                page_number INTEGER,
                 content_hash TEXT,
                 embedding vector({EMBEDDING_DIM}),
                 created_at TIMESTAMP DEFAULT NOW()
@@ -33,6 +34,8 @@ def init_schema(conn):
         )
         # Backward-compatible migration for tables created before content_hash existed.
         cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash TEXT;")
+        # Same, for page_number (added when ingesting OCR'd PDFs page by page).
+        cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS page_number INTEGER;")
         cur.execute(
             """
             CREATE INDEX IF NOT EXISTS documents_embedding_hnsw_idx
