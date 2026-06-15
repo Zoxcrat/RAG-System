@@ -149,11 +149,20 @@
 
 ### ETAPA 6 — Feature estrella: citas clickeables con salto a página
 - **Objetivo:** citas clickeables que hacen saltar el visor a la página exacta.
-- **Archivos que toca:** `frontend/` (render de citas como links + control del
-  visor PDF.js); el backend ya provee `page_number` (Etapas 3–4).
-- **Estado:** ⬜ PENDIENTE
-- **Notas:** es el cierre del "hilo conductor" del `page_number`. Click en
-  `[página X]` → el visor navega a esa página.
+- **Archivos que toca:** `frontend/src/citations.ts` (+ test),
+  `components/AnswerText.tsx`, `components/AskPanel.tsx`, `App.tsx`/`App.css`.
+- **Estado:** ✅ **COMPLETADA (2026-06-15)**
+- **Notas:**
+  - `citations.ts`: `parseAnswer` (función pura) parte el texto en segmentos de
+    texto y citas (`[página N]`, regex tolerante a espacios).
+  - `AnswerText.tsx`: renderiza cada cita como un **botón**; al click llama
+    `onCite(page)`.
+  - El click setea `page` en `App` → el `PdfViewer` (componente **controlado**)
+    re-renderiza esa página (flujo de datos unidireccional de React). Al llegar
+    una respuesta, además salta a la **primera página citada**.
+  - **Cierra el hilo conductor:** extracción → chunk → retrieval → cita → click → salto.
+  - **Verificado:** `npm run build` OK + **6 tests del parser** (vitest, primer
+    test del frontend). Render visual: con `npm run dev` + backend con key.
 
 ### ETAPA 7 — Pulido y robustez
 - **Objetivo:** manejo de errores, loading states, que se vea prolijo.
