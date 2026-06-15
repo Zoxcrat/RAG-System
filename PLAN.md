@@ -130,10 +130,22 @@
 ### ETAPA 5 — Frontend React con visor PDF
 - **Objetivo:** visor PDF.js, input de pregunta, área de respuesta, conexión con
   el backend.
-- **Archivos que toca:** nuevo `frontend/` (React + PDF.js) y su tooling.
-- **Estado:** ⬜ PENDIENTE
-- **Notas:** layout básico: visor del PDF a un lado, panel de Q&A al otro.
-  Consume `POST /ask` y muestra respuesta + citas.
+- **Archivos que toca:** `frontend/` (Vite + React + TS): `src/App.tsx`,
+  `src/components/PdfViewer.tsx`, `src/components/AskPanel.tsx`, `src/api.ts`,
+  `src/types.ts` + config (package.json, vite, tsconfig).
+- **Estado:** ✅ **COMPLETADA (2026-06-15)**
+- **Notas:**
+  - Vite + React + **TypeScript**; **react-pdf** (PDF.js) para el visor.
+  - Layout: visor a la izquierda (`Document`/`Page` + nav prev/next), panel Q&A a
+    la derecha (input → `POST /ask` → respuesta + `pages` + `sources`, con
+    loading/error).
+  - **Estado de página levantado a `App`** (lifting state up): visor y panel
+    comparten `page`. Al responder, el visor salta a la primera página fuente —
+    base para las citas clickeables de la E6.
+  - Worker de PDF.js apuntado a `pdfjs-dist` vía `new URL(..., import.meta.url)`.
+  - **Verificado:** `npm run build` (tsc + vite build) compila y tipa OK.
+  - *Pendiente:* `/ask` real necesita `OPENAI_API_KEY`; ver en vivo con
+    `npm run dev` + backend. 3 vulnerabilidades npm (pdfjs) → revisar en E7.
 
 ### ETAPA 6 — Feature estrella: citas clickeables con salto a página
 - **Objetivo:** citas clickeables que hacen saltar el visor a la página exacta.
