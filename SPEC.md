@@ -13,44 +13,61 @@ complete, that answers natural language questions **grounded exclusively** in a
 provided document corpus, with citations to sources and without hallucinating when
 there is no relevant information.
 
+> **Note (2026-06).** This started as a plain-text RAG and grew into a PDF Q&A system
+> with clickable page citations and a web GUI. The sections below are updated to the
+> current system; the original base-RAG spec is preserved where still accurate.
+
 **In scope:**
-- Ingestion of plain text documents: chunking, embeddings and persistence.
+- **PDF ingestion via OCR**: render each page (PyMuPDF) → OCR (Tesseract) → per-page text
+  cache; the embedded text layer is ignored (it is partial and corrupt).
+- **Chunking per page** carrying `page_number` end to end (extraction → chunk → retrieval
+  → citation → click → viewer jump). Idempotent, batched embeddings.
 - Vector storage and similarity search in PostgreSQL + PGVector.
-- Top-K retrieval by cosine distance.
-- Grounded generation with an LLM, citations and an anti-hallucination relevance threshold.
+- **Hybrid retrieval**: vector (cosine k-NN) + lexical (Postgres full-text) fused with
+  Reciprocal Rank Fusion.
+- Grounded generation with an LLM, `[página N]` citations and an anti-hallucination
+  relevance threshold.
+- **FastAPI** backend (`/health`, `/ask`, `/pdf`) and a **React + Vite + TypeScript**
+  frontend (PDF viewer + Q&A panel, clickable citations).
 - Interactive demo CLI.
 
-**Out of scope (roadmap, not implemented):** hybrid search (vector + keyword),
-reranking, semantic chunking, metadata filtering, evaluation harness, streaming,
-retries/backoff, idempotent ingestion, multi-file and multi-format ingestion.
+**Out of scope (roadmap, not implemented):** reranking (cross-encoder), structure-aware
+chunking (rows/sections), metadata filtering, evaluation harness (recall@k, MRR,
+faithfulness), diagram/vision understanding, streaming.
 
-**Locked-in technical constraints:** Python 3.10+, PostgreSQL 16 with PGVector (in
-Docker), OpenAI API for embeddings and generation, `psycopg2`, `python-dotenv`.
+**Locked-in technical constraints:** Python 3.12, PostgreSQL 16 with PGVector and Tesseract
+(in Docker), OpenAI API for embeddings and generation, FastAPI/uvicorn, `psycopg2`,
+`python-dotenv`. Frontend: React 18 + Vite + TypeScript, react-pdf (PDF.js).
 
 ---
 
 ## 2. Architecture
 
-Seven modules in `src/`, each with a single responsibility. Dependencies flow in a
-single direction (no cycles):
+Modules in `src/`, each with a single responsibility. Dependencies flow in a single
+direction (no cycles):
 
 ```
-main ──► rag ──► retrieve ──► embed ──► (OpenAI API)
-  │       │          │
-  │       └──────────┴────► db ──► (PostgreSQL + PGVector)
-  └────► ingest ──► embed, db
+api  ──► rag ──► retrieve ──► embed ──► (OpenAI API)
+ │        │         │
+main ─────┤         └────────► db ──► (PostgreSQL + PGVector)
+ │        │
+ └──► ingest ──► embed, db
+        ▲
+pdf_loader (PDF → OCR JSON) ──feeds──┘
 
-db, embed, ingest, rag ──► config ──► (environment / .env)
+db, embed, ingest, retrieve, rag, api ──► config ──► (environment / .env)
 ```
 
 | Module | Responsibility |
 |---|---|
 | `config` | Single source of truth for environment configuration. The only module that reads `os.getenv`. |
-| `db` | PostgreSQL connection and schema management (`vector` extension, `documents` table, HNSW index, content-hash unique index). Does not know about embeddings or the LLM. |
-| `embed` | Convert text into vectors via OpenAI. The only point that calls the embeddings endpoint. |
-| `ingest` | Offline pipeline: read file → chunking with overlap → batch embeddings → INSERT into `documents`. |
-| `retrieve` | Search pipeline: embed the query → k-NN by cosine distance in PGVector → return chunks with metadata and distance. |
-| `rag` | Orchestrates the query phase: building the grounded prompt, relevance threshold, LLM call, assembling the response. |
+| `db` | PostgreSQL connection and schema (`vector` extension, `documents` table, HNSW + GIN indexes, content-hash unique index). Does not know about embeddings or the LLM. |
+| `pdf_loader` | Scanned PDF → per-page OCR text (PyMuPDF render + Tesseract), with a JSON cache. Independent of the DB. |
+| `embed` | Convert text into vectors via OpenAI, batched (≤2048 inputs/request). The only point that calls the embeddings endpoint. |
+| `ingest` | Offline pipeline: text/OCR pages → chunking (per page) → batch embeddings → idempotent INSERT into `documents`. |
+| `retrieve` | Hybrid search: vector (cosine k-NN) + lexical (full-text) arms, fused with Reciprocal Rank Fusion. Returns chunks with metadata, page and distance. |
+| `rag` | Orchestrates the query phase: grounded prompt, relevance threshold, LLM call, response (answer + `[página N]` + pages). |
+| `api` | FastAPI app exposing `/health`, `/ask`, `/pdf` over HTTP (CORS for local dev). |
 | `main` | Interactive CLI: initializes the schema, offers re-ingestion, question/answer loop. Presentation layer. |
 
 **Data model** (`documents`):
@@ -61,11 +78,15 @@ db, embed, ingest, rag ──► config ──► (environment / .env)
 | `content` | `TEXT NOT NULL` | original text chunk |
 | `source` | `TEXT` | name of the source document |
 | `chunk_index` | `INTEGER` | position of the chunk within the document |
-| `content_hash` | `TEXT` | SHA-256 of `content`; unique, used for idempotent ingestion |
+| `page_number` | `INTEGER` | source page (1-based); `NULL` for plain text. The citation through-line. |
+| `content_hash` | `TEXT` | SHA-256 of `source + page_number + content`; unique, used for idempotent ingestion |
 | `embedding` | `vector(1536)` | embedding of the chunk |
+| `tsv` | `tsvector` | full-text vector, **generated** from `content` (OCR noise `~ = \|` stripped first); the lexical arm |
 | `created_at` | `TIMESTAMP DEFAULT NOW()` | |
 
-Indexes: HNSW over `embedding` using `vector_cosine_ops`; UNIQUE over `content_hash`.
+Indexes: **HNSW** over `embedding` (`vector_cosine_ops`); **GIN** over `tsv`; **UNIQUE** over
+`content_hash`. All schema/index creation is idempotent (`IF NOT EXISTS`), and new columns are
+added to pre-existing tables with `ADD COLUMN IF NOT EXISTS`.
 
 ---
 
@@ -94,50 +115,78 @@ embed_text(text: str) -> list[float]
 # Returns a vector of dimension EMBEDDING_DIM.
 
 embed_texts(texts: list[str]) -> list[list[float]]
-# Batch. Preserves input order. [] -> [].
+# Batch. Splits into batches of EMBED_BATCH_SIZE (1000) to stay under OpenAI's
+# 2048-inputs-per-request cap; preserves global input order. [] -> [].
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 ```
 
+### `pdf_loader`
+```python
+extract_pages_from_pdf(pdf_path, dpi=200, max_pages=None, lang="eng") -> list[ExtractedPage]
+# Render each page (PyMuPDF, zoom = dpi/72) and OCR it (Tesseract). Per-page error
+# isolation (a failed page -> text=""), fail-fast if Tesseract is missing.
+# ExtractedPage = {"page_number": int (1-based), "text": str}.
+save_extracted_text(pages, path) / load_extracted_text(path)   # JSON cache (OCR runs once)
+```
+
 ### `ingest`
 ```python
-chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]
-# Sliding window over characters with overlap. step = chunk_size - overlap.
-# Empty text -> [].
+chunk_text(text, chunk_size=500, overlap=100) -> list[str]
+# Sliding window over characters with overlap. step = chunk_size - overlap. Empty -> [].
+
+ingest_pages(conn, pages: list[dict], source: str) -> int
+# OCR pages [{page_number, text}] → chunk PER PAGE (each chunk keeps its page_number,
+# never spans two pages) → batch embed → idempotent INSERT. Returns NEW rows.
 
 ingest_file(conn, path: str) -> int
-# Reads the file, chunks it, embeds in batch and batch-inserts each chunk with its
-# source (basename), chunk_index and content_hash, using ON CONFLICT DO NOTHING.
-# Idempotent. Returns the number of NEW rows inserted (0 on a repeat run).
+# Plain-text file → chunks with page_number=NULL. Idempotent. Returns NEW rows.
+# content_hash = sha256(source + page_number + content). New-row count via RETURNING.
 ```
 
 ### `retrieve`
 ```python
-retrieve(conn, query: str, top_k: int = 5) -> list[dict]
-# Embeds the query and performs k-NN by cosine distance (operator <=>),
-# ORDER BY distance ASC LIMIT top_k.
-# Each dict: {"id", "content", "source", "chunk_index", "distance": float}
+retrieve(conn, query, top_k=10) -> list[dict]            # vector-only arm (cosine k-NN, <=>)
+_keyword_search(conn, query, limit) -> list[dict]        # lexical arm (full-text, OR semantics)
+reciprocal_rank_fusion(ranked_lists, top_k, rrf_k=60) -> list[dict]   # pure: score = Σ 1/(k+rank)
+retrieve_hybrid(conn, query, top_k=10, candidates=20) -> list[dict]   # used by rag.ask
+# Each dict: {"id","content","source","chunk_index","page_number","distance": float|None}
+# distance is None for keyword-only hits (the relevance gate stays vector-based).
 ```
 
 ### `rag`
 ```python
 build_prompt(query: str, chunks: list[dict]) -> tuple[str, str]
-# Returns (system_prompt, user_prompt). The user_prompt wraps each chunk in
-# <chunk id="N" source="X" chunk_index="Y"> inside a <context> block,
-# numbered 1..K, followed by "Question: {query}".
+# Returns (system_prompt, user_prompt). Each chunk is wrapped in
+# <chunk page="N" source="X"> inside a <context> block; the system prompt requires
+# answers from context only and citations in the EXACT format [página N] (so the
+# frontend can parse them). Ends with "Question: {query}".
 
 generate_answer(query: str, chunks: list[dict]) -> str
-# If there are no chunks or min(distance) > RELEVANCE_THRESHOLD: returns a
+# If there are no chunks or min cosine distance > RELEVANCE_THRESHOLD: returns a
 # "not enough information" message + best distance, WITHOUT calling the LLM.
+# (Keyword-only chunks with distance None are ignored by the gate.)
 # Otherwise: calls the LLM and returns the response. Errors -> friendly message.
 
-ask(conn, query: str, top_k: int = 5) -> dict
-# Orchestrates retrieve + generate_answer.
-# Returns {"query", "answer", "sources": [{"id","source","chunk_index","distance"}],
-#           "min_distance": float | None}
+ask(conn, query: str, top_k: int = 10) -> dict
+# Orchestrates retrieve_hybrid + generate_answer.
+# Returns {"query", "answer",
+#          "sources": [{"id","source","chunk_index","page_number","distance"}],
+#          "pages": [int],            # unique sorted pages of the retrieved chunks
+#          "min_distance": float | None}
 
 LLM_MODEL = "gpt-4o-mini"; TEMPERATURE = 0; MAX_TOKENS = 800
-DEFAULT_TOP_K = 5; RELEVANCE_THRESHOLD = 0.5
+DEFAULT_TOP_K = 10; RELEVANCE_THRESHOLD = 0.5
+RETRIEVAL_CANDIDATES = 20; RRF_K = 60   # hybrid search
+```
+
+### `api` (FastAPI)
+```python
+GET  /health  -> {"status": "ok"}                      # liveness, no DB
+POST /ask     {query: str, top_k?: int} -> {query, answer, sources[...page_number],
+                                            pages, min_distance}   # Pydantic-validated
+GET  /pdf     -> the PDF bytes (application/pdf, FileResponse)     # for the viewer
+# CORS enabled (CORS_ORIGINS, default "*"). DB connection per request (get_db dependency).
 ```
 
 ### `main`
@@ -158,11 +207,14 @@ run_demo() -> None
 | Vector dimension | `1536` | Dimension of the chosen model. It is part of the schema: changing it requires migrating the column and re-embedding everything. |
 | Index | HNSW | Approximate k-NN, fast and with good recall; acceptable trade-off (more memory and slower inserts) for a read-heavy system. |
 | Distance metric | Cosine (`vector_cosine_ops`, `<=>`) | Standard for text embeddings; compares direction, not magnitude. Range 0 (identical) to 2 (opposite). |
-| Chunking | Character window, `size=500`, `overlap=100` | Small chunks → precise retrieval; overlap → no loss of context at the edges. Deliberate simplicity. |
+| Text source | OCR (PyMuPDF + Tesseract), **not** `get_text()` | The scan's embedded text layer is partial/corrupt; re-OCR from the rendered image is the only reliable source. DPI 200, cached to JSON. |
+| Chunking | Character window, `size=500`, `overlap=100`, **per page** | Small chunks → precise retrieval; chunk-per-page → every chunk has one exact `page_number`, so a `[página N]` citation is unambiguous. |
+| Citation format | exact `[página N]` | Stable, regex-parseable on the frontend → turns each citation into a button that jumps the viewer. |
+| Retrieval | **Hybrid** (vector + full-text) fused with **RRF** (`k=60`), `candidates=20`/arm | Vector misses facts buried in dense OCR chunks; the lexical arm catches literal tokens (part numbers). RRF needs no score normalization. |
 | Generation | `temperature=0` | Deterministic responses faithful to the context, not creative. Auditable and testable. |
 | `max_tokens` | `800` | Cap on response length/cost. |
-| `top_k` | `5` | Enough context without diluting the prompt. |
-| Relevance threshold | `0.5` (over the minimum distance) | If the closest chunk exceeds the threshold, the LLM is not called and the system responds honestly. Prevents hallucinations on out-of-domain questions. |
+| `top_k` | `10` (was 5) | Deeper context so hybrid's rescued hits reach the prompt on dense tables; cost stays trivial with `gpt-4o-mini`. |
+| Relevance threshold | `0.5` (over the minimum **cosine** distance) | If the closest chunk exceeds the threshold, the LLM is not called and the system responds honestly. Stays vector-based under hybrid search. |
 
 ---
 
@@ -170,25 +222,29 @@ run_demo() -> None
 
 **`db`**
 - `get_connection()` opens a connection using env vars with defaults; the port is cast to `int`.
-- `init_schema(conn)` is idempotent: running it N times does not fail nor duplicate objects. It leaves the `vector` extension, the `documents` table with the 7 specified columns, the HNSW index with `vector_cosine_ops`, and the `content_hash` UNIQUE index created.
+- `init_schema(conn)` is idempotent: running it N times does not fail nor duplicate objects. It leaves the `vector` extension, the `documents` table with the specified columns (incl. `page_number` and the generated `tsv`), the HNSW index (`vector_cosine_ops`), the GIN index on `tsv`, and the `content_hash` UNIQUE index created.
 - `reset_db(conn)` leaves the table empty and with the schema recreated.
 
 **`embed`**
 - `embed_text` returns a list of floats of length `EMBEDDING_DIM` (1536).
-- `embed_texts` returns one list per input, **in the same order**; with empty input returns `[]`.
+- `embed_texts` returns one list per input, **in the same order**, splitting into batches of ≤2048 inputs/request; with empty input returns `[]` and makes no API call.
 
 **`ingest`**
 - `chunk_text` produces chunks of at most `chunk_size`, with overlap of `overlap` between consecutive ones; empty text → `[]`; does not generate empty chunks.
-- `ingest_file` persists one record per chunk with `content`, `source` (basename of the path), consecutive `chunk_index` starting at 0, `content_hash`, and its `embedding`. Insertion is batched and idempotent (`ON CONFLICT (content_hash) DO NOTHING`); it returns the number of newly inserted rows (0 when re-ingesting an unchanged document).
+- `ingest_pages` chunks each page independently so every chunk carries its `page_number` and none spans two pages; `chunk_index` runs across the whole document; empty pages contribute nothing.
+- Insertion is batched and idempotent (`content_hash = sha256(source + page_number + content)`, `ON CONFLICT (content_hash) DO NOTHING`); the new-row count uses `RETURNING` (accurate across `execute_values`' internal pages). `ingest_file` is the same with `page_number = NULL`.
 
 **`retrieve`**
-- Returns at most `top_k` results, **ordered by ascending cosine distance** (most relevant first).
-- Each result includes `id`, `content`, `source`, `chunk_index` and `distance` (float). With an empty table → `[]`.
+- `retrieve` (vector arm) returns at most `top_k` results **ordered by ascending cosine distance**; each includes `id`, `content`, `source`, `chunk_index`, `page_number` and `distance` (float). Empty table → `[]`.
+- `reciprocal_rank_fusion` scores a doc as `Σ 1/(rrf_k + rank)` over the input lists, keeps the variant carrying a distance, and returns the top_k by score. `retrieve_hybrid` fuses the vector and keyword arms; keyword-only hits carry `distance = None`.
 
 **`rag`**
-- `build_prompt` numbers the chunks 1..K and wraps them with their `source` and `chunk_index` inside `<context>`; the system prompt instructs to answer only with the context, to acknowledge missing info, to cite `[n]` and not to make things up.
-- `generate_answer` **does not call the LLM** if there are no chunks or if `min(distance) > RELEVANCE_THRESHOLD`, and in that case reports the best distance. An API failure returns a friendly message, never an unhandled exception.
-- `ask` returns a dict with `query`, `answer`, `sources` (with `distance` per source) and `min_distance`.
+- `build_prompt` tags each chunk with its `page` inside `<context>`; the system prompt instructs to answer only from context, acknowledge missing info, cite in the exact `[página N]` format, and never invent pages or citations.
+- `generate_answer` **does not call the LLM** if there are no chunks or if the minimum cosine distance (ignoring `None`) `> RELEVANCE_THRESHOLD`, reporting the best distance. An API failure returns a friendly message, never an unhandled exception.
+- `ask` returns a dict with `query`, `answer`, `sources` (each with `page_number` and `distance`), `pages` (unique sorted) and `min_distance`.
+
+**`api`**
+- `/health` returns `{"status":"ok"}` without touching the DB. `/ask` validates the body with Pydantic (empty `query` or `top_k<=0` → 422) and returns the `ask` payload. `/pdf` serves the PDF as `application/pdf`. Internal failures become a JSON 500, not a stack trace.
 
 **`main`**
 - Initializes the schema on startup and offers optional re-ingestion.
