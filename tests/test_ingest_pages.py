@@ -107,11 +107,16 @@ def _patch_io(monkeypatch):
     )
     captured = {}
 
-    def fake_execute_values(cur, sql, rows, template=None):
+    def fake_execute_values(cur, sql, rows, template=None, fetch=False):
         captured["sql"] = sql
         captured["rows"] = rows
         captured["template"] = template
         cur.rowcount = len(rows)
+        # _store_records uses fetch=True + RETURNING to count inserted rows;
+        # mimic one RETURNING row per inserted row.
+        if fetch:
+            return [(i,) for i in range(len(rows))]
+        return None
 
     monkeypatch.setattr(ingest_mod, "execute_values", fake_execute_values)
     return captured

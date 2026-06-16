@@ -101,20 +101,25 @@ def _store_records(conn, records: list[ChunkRecord]) -> int:
     ]
 
     with conn.cursor() as cur:
-        execute_values(
+        # fetch=True returns the RETURNING rows across all of execute_values'
+        # internal pages; with ON CONFLICT DO NOTHING only actually-inserted rows
+        # come back, so its length is an accurate new-row count. (cur.rowcount
+        # would report only the last internal page, under-counting large inserts.)
+        returned = execute_values(
             cur,
             """
             INSERT INTO documents
                 (content, source, chunk_index, page_number, content_hash, embedding)
             VALUES %s
             ON CONFLICT (content_hash) DO NOTHING
+            RETURNING id
             """,
             rows,
             template="(%s, %s, %s, %s, %s, %s::vector)",
+            fetch=True,
         )
-        inserted = cur.rowcount
     conn.commit()
-    return inserted
+    return len(returned)
 
 
 def ingest_file(conn, path: str) -> int:
