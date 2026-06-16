@@ -33,7 +33,7 @@ def test_build_prompt_handles_chunk_without_page():
 # --- ask: assembles sources with page_number and the unique pages used -------
 
 def _patch_pipeline(monkeypatch, chunks, answer="ok"):
-    monkeypatch.setattr(rag, "retrieve", lambda conn, query, top_k: chunks)
+    monkeypatch.setattr(rag, "retrieve_hybrid", lambda conn, query, top_k: chunks)
     monkeypatch.setattr(rag, "generate_answer", lambda query, c: answer)
 
 

@@ -36,11 +36,31 @@ def init_schema(conn):
         cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash TEXT;")
         # Same, for page_number (added when ingesting OCR'd PDFs page by page).
         cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS page_number INTEGER;")
+        # Full-text vector for hybrid retrieval (vector + keyword). A STORED
+        # GENERATED column stays in sync with content automatically and is computed
+        # for existing rows when added, so enabling hybrid search needs no re-ingest.
+        # We strip OCR noise characters (~ = |) that the scan glues onto words
+        # ("HANGER~HEADLINER") first: left in, they corrupt tokenization (the lexeme
+        # becomes '~headliner' and never matches 'headliner'). Hyphens are kept —
+        # the parser already indexes part numbers like 0512029-8 both whole and split.
+        cur.execute(
+            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS tsv tsvector "
+            "GENERATED ALWAYS AS "
+            "(to_tsvector('english', regexp_replace(content, '[~=|`]+', ' ', 'g'))) "
+            "STORED;"
+        )
         cur.execute(
             """
             CREATE INDEX IF NOT EXISTS documents_embedding_hnsw_idx
             ON documents
             USING hnsw (embedding vector_cosine_ops);
+            """
+        )
+        # GIN index makes the @@ full-text match fast (the keyword arm of hybrid search).
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS documents_tsv_gin_idx
+            ON documents USING GIN (tsv);
             """
         )
         # Dedup key: the same chunk text is never stored twice, which makes

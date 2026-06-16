@@ -40,9 +40,23 @@ EMBEDDING_DIM = _get_int("EMBEDDING_DIM", 1536)
 # batches of this size. 1000 stays well under both limits for our ~500-char chunks.
 EMBED_BATCH_SIZE = _get_int("EMBED_BATCH_SIZE", 1000)
 
+# --- Retrieval (hybrid search) ---
+# Each arm (vector + keyword) pulls this many candidates before fusing. Larger
+# than top_k so a chunk ranked outside the final top_k by one arm can still be
+# rescued by the other (this is what fixes buried-fact recall).
+RETRIEVAL_CANDIDATES = _get_int("RETRIEVAL_CANDIDATES", 20)
+# Reciprocal Rank Fusion constant: score = sum(1 / (RRF_K + rank)). 60 is the
+# value from the original RRF paper; it dampens the top ranks so lower-ranked
+# results still contribute and one arm can't fully dominate.
+RRF_K = _get_int("RRF_K", 60)
+
 # --- Generation / RAG ---
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
-DEFAULT_TOP_K = _get_int("DEFAULT_TOP_K", 5)
+# Chunks fed to the LLM. Bumped 5 -> 10 alongside hybrid search: dense catalog
+# tables share generic words ("part", "number", "hanger"), so a buried fact can
+# sit a few ranks deep after fusion; a deeper window lets the keyword arm's rescue
+# actually reach the context. Cost is still a fraction of a cent with gpt-4o-mini.
+DEFAULT_TOP_K = _get_int("DEFAULT_TOP_K", 10)
 TEMPERATURE = _get_float("TEMPERATURE", 0.0)
 MAX_TOKENS = _get_int("MAX_TOKENS", 800)
 RELEVANCE_THRESHOLD = _get_float("RELEVANCE_THRESHOLD", 0.5)

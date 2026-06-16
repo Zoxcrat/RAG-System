@@ -4,7 +4,7 @@ from openai import OpenAI
 
 from src import config
 from src.db import get_connection
-from src.retrieve import retrieve
+from src.retrieve import retrieve_hybrid
 
 LLM_MODEL = config.LLM_MODEL
 DEFAULT_TOP_K = config.DEFAULT_TOP_K
@@ -55,9 +55,13 @@ def build_prompt(query: str, chunks: list[dict]) -> tuple[str, str]:
 
 
 def _min_distance(chunks: list[dict]) -> Optional[float]:
-    if not chunks:
-        return None
-    return min(chunk["distance"] for chunk in chunks)
+    """Smallest cosine distance among chunks that have one.
+
+    Hybrid retrieval can include keyword-only chunks (distance None); those are
+    skipped so the anti-hallucination gate stays grounded in semantic distance.
+    """
+    distances = [c["distance"] for c in chunks if c.get("distance") is not None]
+    return min(distances) if distances else None
 
 
 def _pages_used(chunks: list[dict]) -> list[int]:
@@ -100,7 +104,7 @@ def generate_answer(query: str, chunks: list[dict]) -> str:
 
 
 def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
-    chunks = retrieve(conn, query, top_k)
+    chunks = retrieve_hybrid(conn, query, top_k)
     answer = generate_answer(query, chunks)
 
     sources = [
