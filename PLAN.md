@@ -4,7 +4,7 @@
 > Claude Code lo consulta al inicio de cada etapa para saber dónde estamos y qué
 > falta, y lo actualiza al completar cada una.
 >
-> **Última actualización:** 2026-06-16 · **Estado general: 7/7 etapas completadas + validación end-to-end real** ✅
+> **Última actualización:** 2026-06-16 · **Estado general: 7/7 etapas + validación end-to-end real + búsqueda híbrida** ✅
 
 ---
 
@@ -201,10 +201,13 @@ Primera corrida con `OPENAI_API_KEY` real. Detalle y teoría en
      a **2048 inputs**. Ahora batchea (≤2048). **Era bloqueante** para ingerir el catálogo.
   2. `fix(ingest)`: `cur.rowcount` tras `execute_values` reporta solo la última página
      interna (decía 5 en vez de 2605). Ahora cuenta con `RETURNING`.
-- **Limitación conocida (recall):** preguntas cuyo dato está sepultado en un chunk
-  denso y ruidoso pueden no recuperarse (ej. "headliner hanger", pág. 201, no entró al
-  top-k). Es el límite del retrieval semántico puro → motiva el roadmap: búsqueda
-  híbrida (vector + BM25), chunking estructural y reranking.
+- **Limitación de recall → RESUELTA con búsqueda híbrida** (2026-06-16, ver
+  [docs/09-busqueda-hibrida.md](docs/09-busqueda-hibrida.md)). El vector puro perdía datos
+  sepultados en chunks densos (ej. "headliner hanger", pág. 201). Se agregó un arm léxico
+  (full-text de Postgres) fusionado con el vectorial vía **Reciprocal Rank Fusion**; ahora
+  responde `0411680 [página 201]` y permite **buscar por número de parte**. El gate
+  anti-alucinación sigue siendo vectorial. `DEFAULT_TOP_K` 5 → 10. 49 tests passing.
+  - *Próximo en esta línea:* reranking (cross-encoder) y chunking estructural (por fila).
 
 ---
 
