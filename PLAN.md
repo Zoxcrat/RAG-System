@@ -4,7 +4,7 @@
 > Claude Code lo consulta al inicio de cada etapa para saber dónde estamos y qué
 > falta, y lo actualiza al completar cada una.
 >
-> **Última actualización:** 2026-06-15 · **Estado general: 7/7 etapas completadas** ✅
+> **Última actualización:** 2026-06-16 · **Estado general: 7/7 etapas completadas + validación end-to-end real** ✅
 
 ---
 
@@ -12,7 +12,7 @@
 
 - **Proyecto:** extender un RAG existente para una entrevista técnica (será
   presencial y en vivo, así que el código debe entenderse y defenderse bien).
-- **Objetivo final:** un sistema que procese un PDF técnico de ~600 páginas
+- **Objetivo final:** un sistema que procese un PDF técnico de ~670 páginas
   (catálogo de partes de aviación, escaneado, con OCR parcial), permita **Q&A en
   tiempo real**, muestre **citas con salto a la página exacta del PDF al hacer
   clic**, y tenga una **GUI web básica**.
@@ -85,7 +85,7 @@
     la ingestión sigue siendo idempotente.
   - CLI: `python -m src.ingest <pages.json> [source]` ingiere un JSON de OCR.
   - **Verificado:** 26 tests passing (10 nuevos, mockeados, sin DB/API).
-  - *Pendiente:* corrida real end-to-end (necesita `OPENAI_API_KEY`).
+  - ✅ *Verificado end-to-end* (2026-06-16, con key real) — ver "VALIDACIÓN END-TO-END".
 
 ### ETAPA 3 — Retrieval y generación con citas de página
 - **Objetivo:** el retrieval devuelve `page_number`; la generación cita
@@ -104,7 +104,7 @@
   - `main.py`: la CLI muestra la página en cada fuente y la lista `pages`.
   - **Verificado:** 32 tests passing (6 nuevos + `test_retrieve` actualizado;
     mockeados, sin DB/API).
-  - *Pendiente:* corrida real end-to-end (necesita `OPENAI_API_KEY`).
+  - ✅ *Verificado end-to-end* (2026-06-16, con key real) — ver "VALIDACIÓN END-TO-END".
 
 ### ETAPA 4 — Backend API REST (FastAPI)
 - **Objetivo:** endpoints de health y de pregunta (query → respuesta + citas +
@@ -125,7 +125,7 @@
     puerto 8000). Targets `make api` (local) / `make docker-api`.
   - **Verificado:** 40 tests passing (8 de API con `TestClient`, mockeados) +
     smoke test del contenedor (`/health`, `/pdf`).
-  - *Pendiente:* `/ask` real necesita `OPENAI_API_KEY` (embeddings + LLM).
+  - ✅ *Verificado end-to-end* (2026-06-16): `/ask` y `/pdf` por HTTP con key real.
 
 ### ETAPA 5 — Frontend React con visor PDF
 - **Objetivo:** visor PDF.js, input de pregunta, área de respuesta, conexión con
@@ -144,8 +144,8 @@
     base para las citas clickeables de la E6.
   - Worker de PDF.js apuntado a `pdfjs-dist` vía `new URL(..., import.meta.url)`.
   - **Verificado:** `npm run build` (tsc + vite build) compila y tipa OK.
-  - *Pendiente:* `/ask` real necesita `OPENAI_API_KEY`; ver en vivo con
-    `npm run dev` + backend. 3 vulnerabilidades npm (pdfjs) → revisar en E7.
+  - ✅ *Verificado en vivo* (2026-06-16): `npm run dev` + API real; las citas
+    `[página N]` saltan el visor a la página correcta. Vulns npm → resueltas en E7.
 
 ### ETAPA 6 — Feature estrella: citas clickeables con salto a página
 - **Objetivo:** citas clickeables que hacen saltar el visor a la página exacta.
@@ -179,6 +179,32 @@
     runtime; el fix safe no aplica y `--force` sube majors (riesgo de romper) →
     documentadas, no afectan lo que se sirve.
   - **Verificado:** `npm run build` OK (chunks separados) + 6 tests (vitest).
+
+---
+
+## VALIDACIÓN END-TO-END (2026-06-16)
+
+Primera corrida con `OPENAI_API_KEY` real. Detalle y teoría en
+[docs/08-validacion-end-to-end.md](docs/08-validacion-end-to-end.md).
+
+- **OCR completo persistido:** las **670 páginas** OCR-eadas → `data/cessna_172_ocr.json`
+  (gitignored, derivado del PDF). 0 páginas vacías; ~66% son tablas de partes densas,
+  ~9% páginas de diagrama (casi sin texto, esperado).
+- **Ingestión real:** 2605 chunks del catálogo en Postgres, `page_number` intacto en
+  las 670 páginas. Costo total de la corrida: < 1 centavo.
+- **Cadena completa OK:** `/ask` por HTTP cita `[página 199]` con datos reales; el
+  frontend la vuelve botón y el visor salta. El **gate de relevancia** rechaza lo
+  fuera de dominio (ej. "capital of France", distancia 0.735 > umbral 0.5).
+- **2 bugs encontrados y arreglados** (solo aparecían con datos reales, los tests
+  eran mockeados):
+  1. `fix(embed)`: `embed_texts` mandaba todos los chunks en un request → la API tope
+     a **2048 inputs**. Ahora batchea (≤2048). **Era bloqueante** para ingerir el catálogo.
+  2. `fix(ingest)`: `cur.rowcount` tras `execute_values` reporta solo la última página
+     interna (decía 5 en vez de 2605). Ahora cuenta con `RETURNING`.
+- **Limitación conocida (recall):** preguntas cuyo dato está sepultado en un chunk
+  denso y ruidoso pueden no recuperarse (ej. "headliner hanger", pág. 201, no entró al
+  top-k). Es el límite del retrieval semántico puro → motiva el roadmap: búsqueda
+  híbrida (vector + BM25), chunking estructural y reranking.
 
 ---
 
