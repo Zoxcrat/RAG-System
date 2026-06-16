@@ -35,6 +35,10 @@ OPENAI_TIMEOUT = _get_float("OPENAI_TIMEOUT", 30.0)
 # --- Embeddings ---
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 EMBEDDING_DIM = _get_int("EMBEDDING_DIM", 1536)
+# OpenAI's embeddings endpoint rejects requests with more than 2048 inputs (and
+# also caps total tokens per request), so embed_texts splits large inputs into
+# batches of this size. 1000 stays well under both limits for our ~500-char chunks.
+EMBED_BATCH_SIZE = _get_int("EMBED_BATCH_SIZE", 1000)
 
 # --- Generation / RAG ---
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
