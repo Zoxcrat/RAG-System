@@ -34,6 +34,9 @@ def test_build_prompt_handles_chunk_without_page():
 
 def _patch_pipeline(monkeypatch, chunks, answer="ok"):
     monkeypatch.setattr(rag, "retrieve_hybrid", lambda conn, query, top_k: chunks)
+    # rerank is exercised in test_rerank; here use an identity passthrough so the
+    # ask() assertions stay focused on response assembly (no API call).
+    monkeypatch.setattr(rag, "rerank", lambda query, c, top_k: c[:top_k])
     monkeypatch.setattr(rag, "generate_answer", lambda query, c: answer)
 
 

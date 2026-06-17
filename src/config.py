@@ -50,8 +50,17 @@ RETRIEVAL_CANDIDATES = _get_int("RETRIEVAL_CANDIDATES", 20)
 # results still contribute and one arm can't fully dominate.
 RRF_K = _get_int("RRF_K", 60)
 
+# --- Reranking ---
+# After hybrid retrieval, an LLM reranker reorders the candidates by relevance
+# (a cross-encoder-style step). It runs on this many candidates and narrows them
+# to DEFAULT_TOP_K for the prompt. Disable to fall back to the fused order.
+RERANK_ENABLED = os.getenv("RERANK_ENABLED", "true").lower() in ("1", "true", "yes")
+RERANK_CANDIDATES = _get_int("RERANK_CANDIDATES", 20)
+
 # --- Generation / RAG ---
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+# Reranker model: reuse the cheap chat model by default (no extra dependency).
+RERANK_MODEL = os.getenv("RERANK_MODEL", LLM_MODEL)
 # Chunks fed to the LLM. Bumped 5 -> 10 alongside hybrid search: dense catalog
 # tables share generic words ("part", "number", "hanger"), so a buried fact can
 # sit a few ranks deep after fusion; a deeper window lets the keyword arm's rescue

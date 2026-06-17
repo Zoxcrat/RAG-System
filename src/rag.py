@@ -4,6 +4,7 @@ from openai import OpenAI
 
 from src import config
 from src.db import get_connection
+from src.rerank import rerank
 from src.retrieve import retrieve_hybrid
 
 LLM_MODEL = config.LLM_MODEL
@@ -11,6 +12,8 @@ DEFAULT_TOP_K = config.DEFAULT_TOP_K
 TEMPERATURE = config.TEMPERATURE
 MAX_TOKENS = config.MAX_TOKENS
 RELEVANCE_THRESHOLD = config.RELEVANCE_THRESHOLD
+RERANK_ENABLED = config.RERANK_ENABLED
+RERANK_CANDIDATES = config.RERANK_CANDIDATES
 
 _client: Optional[OpenAI] = None
 
@@ -104,7 +107,18 @@ def generate_answer(query: str, chunks: list[dict]) -> str:
 
 
 def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
-    chunks = retrieve_hybrid(conn, query, top_k)
+    # Retrieve a wider candidate set, then rerank it down to top_k. The relevance
+    # gate runs on the candidates first, so an out-of-domain query is refused
+    # without spending a reranking call.
+    candidates = retrieve_hybrid(conn, query, top_k=RERANK_CANDIDATES)
+    min_dist = _min_distance(candidates)
+    relevant = min_dist is not None and min_dist <= RELEVANCE_THRESHOLD
+
+    if RERANK_ENABLED and relevant:
+        chunks = rerank(query, candidates, top_k)
+    else:
+        chunks = candidates[:top_k]
+
     answer = generate_answer(query, chunks)
 
     sources = [
