@@ -1,0 +1,18 @@
+{
+  "description": "Hand-curated evaluation set. Ground truth = the catalog page(s) whose OCR text contains the answer (verified against data/cessna_172_ocr.json). in_domain items measure retrieval (recall@k / MRR); out_of_domain items must be refused by the relevance gate.",
+  "items": [
+    { "question": "What is the part number for the headliner hanger?", "pages": [201], "type": "in_domain", "note": "0411680 HANGER~HEADLINER (buried in a dense table)" },
+    { "question": "What is part number 0411680?", "pages": [201], "type": "in_domain", "note": "part-number lookup" },
+    { "question": "What is the part number for the radio shelf?", "pages": [202], "type": "in_domain", "note": "0512017-1 SHELF-RADIO" },
+    { "question": "Where is the dorsal assembly listed?", "pages": [203], "type": "in_domain", "note": "0531006-1 DORSAL ASSEMBLY" },
+    { "question": "What stringer assembly is listed for the aft cabin top?", "pages": [199, 201], "type": "in_domain", "note": "0512029 series" },
+    { "question": "What is the part number for the rear baggage compartment panel?", "pages": [33], "type": "in_domain", "note": "0511470-4" },
+    { "question": "What is the part number for the wing spar assembly?", "pages": [121], "type": "in_domain", "note": "0523013-1 SPAR ASSEMBLY-WING" },
+    { "question": "What is the part number for the left main landing gear spring?", "pages": [241], "type": "in_domain", "note": "0541198-9" },
+    { "question": "What is the part number for the true airspeed ring assembly?", "pages": [360], "type": "in_domain", "note": "0700189-4" },
+    { "question": "What is the part number for the control yoke assembly?", "pages": [481], "type": "in_domain", "note": "0560006-5 YOKE ASSEMBLY-CONTROL" },
+    { "question": "What is the part number for the overhead console support?", "pages": [601], "type": "in_domain", "note": "0413503-8" },
+    { "question": "What is the capital of France?", "pages": [], "type": "out_of_domain", "note": "gate must refuse" },
+    { "question": "How do I bake a chocolate cake?", "pages": [], "type": "out_of_domain", "note": "gate must refuse" }
+  ]
+}
