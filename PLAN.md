@@ -207,6 +207,10 @@ Primera corrida con `OPENAI_API_KEY` real. Detalle y teoría en
   (full-text de Postgres) fusionado con el vectorial vía **Reciprocal Rank Fusion**; ahora
   responde `0411680 [página 201]` y permite **buscar por número de parte**. El gate
   anti-alucinación sigue siendo vectorial. `DEFAULT_TOP_K` 5 → 10. 49 tests passing.
+  - **Medido (2026-06-16, ver [docs/10-evaluacion.md](docs/10-evaluacion.md)):** `make eval`
+    sobre un gold set de 11 preguntas → **recall@10 0.45 → 0.82** con híbrida (MRR casi
+    igual: los rescates entran en ranks profundos → lo que arreglaría el **reranking**).
+    Gate: 2/2 out-of-domain rechazadas.
   - *Próximo en esta línea:* reranking (cross-encoder) y chunking estructural (por fila).
 
 ---
