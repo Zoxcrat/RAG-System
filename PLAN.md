@@ -211,7 +211,12 @@ Primera corrida con `OPENAI_API_KEY` real. Detalle y teoría en
     sobre un gold set de 11 preguntas → **recall@10 0.45 → 0.82** con híbrida (MRR casi
     igual: los rescates entran en ranks profundos → lo que arreglaría el **reranking**).
     Gate: 2/2 out-of-domain rechazadas.
-  - *Próximo en esta línea:* reranking (cross-encoder) y chunking estructural (por fila).
+  - **Reranking HECHO (2026-06-16, ver [docs/11-reranking.md](docs/11-reranking.md)):**
+    reranker LLM listwise sobre los 20 candidatos del híbrido → **recall@5 0.73 → 0.91,
+    MRR@10 0.39 → 0.69**. Arregla el *orden* (lo que el híbrido no movía). El gate corre
+    antes del rerank; fail-open. Reusa `gpt-4o-mini` (sin cross-encoder/torch).
+  - *Próximo en esta línea:* chunking estructural (por fila), query expansion para los
+    casos que ni entran al pool (ej. radio shelf p202).
 
 ---
 

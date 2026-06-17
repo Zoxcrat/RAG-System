@@ -24,16 +24,18 @@ there is no relevant information.
   → citation → click → viewer jump). Idempotent, batched embeddings.
 - Vector storage and similarity search in PostgreSQL + PGVector.
 - **Hybrid retrieval**: vector (cosine k-NN) + lexical (Postgres full-text) fused with
-  Reciprocal Rank Fusion.
+  Reciprocal Rank Fusion, then an **LLM reranker** over the candidate pool.
+- **Evaluation harness** (recall@k, MRR) over a curated gold set (`make eval`).
 - Grounded generation with an LLM, `[página N]` citations and an anti-hallucination
   relevance threshold.
 - **FastAPI** backend (`/health`, `/ask`, `/pdf`) and a **React + Vite + TypeScript**
   frontend (PDF viewer + Q&A panel, clickable citations).
 - Interactive demo CLI.
 
-**Out of scope (roadmap, not implemented):** reranking (cross-encoder), structure-aware
-chunking (rows/sections), metadata filtering, evaluation harness (recall@k, MRR,
-faithfulness), diagram/vision understanding, streaming.
+**Out of scope (roadmap, not implemented):** a dedicated cross-encoder / rerank-API
+reranker (current reranker reuses the chat LLM), structure-aware chunking (rows/sections),
+query expansion, metadata filtering, faithfulness evaluation, diagram/vision understanding,
+streaming.
 
 **Locked-in technical constraints:** Python 3.12, PostgreSQL 16 with PGVector and Tesseract
 (in Docker), OpenAI API for embeddings and generation, FastAPI/uvicorn, `psycopg2`,
@@ -48,14 +50,14 @@ direction (no cycles):
 
 ```
 api  ──► rag ──► retrieve ──► embed ──► (OpenAI API)
- │        │         │
-main ─────┤         └────────► db ──► (PostgreSQL + PGVector)
- │        │
+ │        │  └──► rerank ─────────────► (OpenAI API)
+main ─────┤         │
+ │        │         └────────► db ──► (PostgreSQL + PGVector)
  └──► ingest ──► embed, db
         ▲
 pdf_loader (PDF → OCR JSON) ──feeds──┘
 
-db, embed, ingest, retrieve, rag, api ──► config ──► (environment / .env)
+db, embed, ingest, retrieve, rerank, rag, api ──► config ──► (environment / .env)
 ```
 
 | Module | Responsibility |
@@ -66,7 +68,8 @@ db, embed, ingest, retrieve, rag, api ──► config ──► (environment / 
 | `embed` | Convert text into vectors via OpenAI, batched (≤2048 inputs/request). The only point that calls the embeddings endpoint. |
 | `ingest` | Offline pipeline: text/OCR pages → chunking (per page) → batch embeddings → idempotent INSERT into `documents`. |
 | `retrieve` | Hybrid search: vector (cosine k-NN) + lexical (full-text) arms, fused with Reciprocal Rank Fusion. Returns chunks with metadata, page and distance. |
-| `rag` | Orchestrates the query phase: grounded prompt, relevance threshold, LLM call, response (answer + `[página N]` + pages). |
+| `rerank` | Listwise LLM reranker over the hybrid candidates. Pure ranking parser + fail-open call. |
+| `rag` | Orchestrates the query phase: hybrid retrieve → gate → rerank → grounded prompt → LLM → response (answer + `[página N]` + pages). |
 | `api` | FastAPI app exposing `/health`, `/ask`, `/pdf` over HTTP (CORS for local dev). |
 | `main` | Interactive CLI: initializes the schema, offers re-ingestion, question/answer loop. Presentation layer. |
 
@@ -154,6 +157,16 @@ retrieve_hybrid(conn, query, top_k=10, candidates=20) -> list[dict]   # used by 
 # distance is None for keyword-only hits (the relevance gate stays vector-based).
 ```
 
+### `rerank`
+```python
+rerank(query, chunks, top_k) -> list[dict]      # listwise LLM rerank, returns top_k
+# Reorders chunks by joint (query, passage) relevance. Fails OPEN: any API/parse
+# error keeps the input order. [] -> [].
+_parse_ranking(text, n) -> list[int]            # pure: model reply -> full 0-based permutation
+# Tolerant: drops invalid/duplicate indices, appends omitted ones (never loses a candidate).
+RERANK_ENABLED = True; RERANK_CANDIDATES = 20; RERANK_MODEL = "gpt-4o-mini"
+```
+
 ### `rag`
 ```python
 build_prompt(query: str, chunks: list[dict]) -> tuple[str, str]
@@ -169,7 +182,8 @@ generate_answer(query: str, chunks: list[dict]) -> str
 # Otherwise: calls the LLM and returns the response. Errors -> friendly message.
 
 ask(conn, query: str, top_k: int = 10) -> dict
-# Orchestrates retrieve_hybrid + generate_answer.
+# Orchestrates: retrieve_hybrid (RERANK_CANDIDATES) -> relevance gate on the
+# candidates -> rerank to top_k (if enabled and gate passed) -> generate_answer.
 # Returns {"query", "answer",
 #          "sources": [{"id","source","chunk_index","page_number","distance"}],
 #          "pages": [int],            # unique sorted pages of the retrieved chunks
@@ -211,6 +225,7 @@ run_demo() -> None
 | Chunking | Character window, `size=500`, `overlap=100`, **per page** | Small chunks → precise retrieval; chunk-per-page → every chunk has one exact `page_number`, so a `[página N]` citation is unambiguous. |
 | Citation format | exact `[página N]` | Stable, regex-parseable on the frontend → turns each citation into a button that jumps the viewer. |
 | Retrieval | **Hybrid** (vector + full-text) fused with **RRF** (`k=60`), `candidates=20`/arm | Vector misses facts buried in dense OCR chunks; the lexical arm catches literal tokens (part numbers). RRF needs no score normalization. |
+| Reranking | **LLM listwise** over 20 candidates (reuse `gpt-4o-mini`), fail-open | Hybrid recall is good but ordering coarse. A cross-encoder-style rerank fixes order (MRR@10 0.39→0.69); reuse the chat model to avoid a torch dependency. Prod would use a dedicated cross-encoder / rerank API. |
 | Generation | `temperature=0` | Deterministic responses faithful to the context, not creative. Auditable and testable. |
 | `max_tokens` | `800` | Cap on response length/cost. |
 | `top_k` | `10` (was 5) | Deeper context so hybrid's rescued hits reach the prompt on dense tables; cost stays trivial with `gpt-4o-mini`. |
@@ -237,6 +252,10 @@ run_demo() -> None
 **`retrieve`**
 - `retrieve` (vector arm) returns at most `top_k` results **ordered by ascending cosine distance**; each includes `id`, `content`, `source`, `chunk_index`, `page_number` and `distance` (float). Empty table → `[]`.
 - `reciprocal_rank_fusion` scores a doc as `Σ 1/(rrf_k + rank)` over the input lists, keeps the variant carrying a distance, and returns the top_k by score. `retrieve_hybrid` fuses the vector and keyword arms; keyword-only hits carry `distance = None`.
+
+**`rerank`**
+- `_parse_ranking(text, n)` returns a full permutation of `range(n)`: valid 1-based indices first (no duplicates), omitted ones appended in order; junk input → `range(n)`.
+- `rerank` returns at most `top_k` chunks reordered by the model; on any API/parse error it returns the input order (fail-open); empty input → `[]` with no API call.
 
 **`rag`**
 - `build_prompt` tags each chunk with its `page` inside `<context>`; the system prompt instructs to answer only from context, acknowledge missing info, cite in the exact `[página N]` format, and never invent pages or citations.

@@ -50,9 +50,11 @@ user question
    ├─ vector arm:  embed (same model) → cosine k-NN (HNSW, <=>)      → 20 candidates
    ├─ lexical arm: Postgres full-text (websearch_to_tsquery, GIN)    → 20 candidates
    ▼
-Reciprocal Rank Fusion (RRF)  → top-k (10) chunks
+Reciprocal Rank Fusion (RRF)  → ~20 candidates
    │
    ├─ relevance gate (min cosine distance > T → refuse, no LLM call)
+   ▼
+LLM reranker (listwise) → reorder → top-k (10) chunks
    ▼
 grounded prompt (context block, each chunk tagged with its page)
    ▼
@@ -126,6 +128,13 @@ fused with **Reciprocal Rank Fusion** (`score = Σ 1/(k+rank)`), which needs no 
 normalization because it uses ranks, not the (incomparable) cosine-distance and `ts_rank`
 scales.
 
+**Reranking.** Hybrid retrieval has good recall but coarse ordering (the right chunk can
+land deep). A listwise LLM reranker re-scores the ~20 fused candidates jointly with the
+question and narrows them to the top-k for the prompt. It reuses the chat model (no heavy
+cross-encoder dependency), fails open (any error keeps the hybrid order), and runs only
+after the relevance gate so out-of-domain queries cost no rerank call. Measured on the
+eval gold set: recall@5 0.73 → 0.91 and MRR@10 0.39 → 0.69 over hybrid alone.
+
 **Refusing instead of guessing.** A retriever always returns *something*. If the closest chunk
 by cosine distance is farther than a threshold, the system skips the LLM call and answers an
 honest "not enough information". The gate stays vector-based even under hybrid search, so a
@@ -176,10 +185,12 @@ src/
   embed.py      text → embedding vectors (OpenAI), batched ≤2048
   ingest.py     chunk-per-page → embed → store (idempotent, batched)
   retrieve.py   vector + full-text arms, Reciprocal Rank Fusion, hybrid search
+  rerank.py     LLM reranker (listwise) over the hybrid candidates
   rag.py        prompt building, relevance gate, grounded generation with [página N]
   api.py        FastAPI: /health, /ask, /pdf (CORS for local dev)
   main.py       interactive CLI
 frontend/       React + Vite + TypeScript: PDF viewer + Q&A panel, clickable citations
+eval/           retrieval evaluation (gold set + recall@k / MRR harness, `make eval`)
 tests/          unit tests, fully mocked (OpenAI + DB)
 docker/         container entrypoint (seeds schema + data on boot)
 data/           the source PDF (gitignored) + OCR cache (gitignored)
@@ -210,7 +221,8 @@ then rebuild. Postgres data lives in a Docker-managed named volume, never on the
 
 The honest list, roughly in order of impact:
 
-- **Reranking** — re-score the fused top-k with a cross-encoder before the LLM sees it.
+- **A stronger reranker** — the current reranker reuses the chat LLM (listwise); a dedicated
+  cross-encoder or a rerank API would be faster and cheaper per query in production.
 - **Structure-aware chunking** — split on rows/sections instead of a fixed character window,
   so a part row isn't cut from its header.
 - **Evaluation** — measure retrieval (recall@k, MRR) and faithfulness instead of judging by eye.
