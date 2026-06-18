@@ -17,5 +17,3 @@ data/*ocr*.json
 # Personal project notes / Claude guidance — kept local, not versioned.
 CLAUDE.md
 
-# Living Spanish docs (/docs) — kept local, not versioned.
-docs/
