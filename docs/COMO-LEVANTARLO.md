@@ -75,13 +75,29 @@ En la otra terminal, cortá el frontend con **Ctrl+C**. Después podés cerrar D
 | Síntoma | Qué hacer |
 |---|---|
 | `curl /health` no responde / "connection refused" | Docker todavía está arrancando, o la API no terminó de levantar. Esperá 20s más y reintentá. |
-| Error raro de "container ... no such container" al levantar | Estado colgado de Docker. Corré: `docker compose up -d --force-recreate api` |
+| Error raro de "container ... no such container" al levantar | Estado colgado de Docker. Probá: `docker compose up -d --force-recreate api`. Si **insiste** (contenedores "fantasma" que ni se borran), ver la nota de abajo 👇 |
 | "port is already allocated" / 8000 o 5173 ocupado | Liberá el puerto: `lsof -ti:8000 \| xargs kill` (y `:5173` para el front). |
 | Todas las respuestas dicen "no tengo información" | Base vacía → re-ingestá el catálogo (ver "Chequeo de datos"). |
 | El visor del PDF no carga | Asegurate de que el backend esté arriba (`/health` ok); el visor pide el PDF a la API. |
 | `npm run dev` falla | Corré `npm install` en `frontend/` y reintentá. |
 
 ---
+
+## 👻 Nota: contenedores "fantasma" de Docker (ya resuelto)
+
+En esta máquina, el proyecto Docker original (`rag`) quedó con **contenedores corruptos**
+que Docker lista pero no puede borrar (ni reiniciando), y trababan el arranque. **Solución
+aplicada:** se cambió el nombre del proyecto Docker a `ragdemo` (con la línea
+`COMPOSE_PROJECT_NAME=ragdemo` dentro del archivo `.env`), que hace que compose **ignore**
+los fantasmas. Los datos quedaron recargados en el volumen nuevo `ragdemo_pgdata`.
+
+- **Para vos esto es transparente:** los comandos `make ...` y `docker compose ...` siguen
+  igual (leen el nombre del proyecto desde `.env`).
+- ⚠️ **No borres la línea `COMPOSE_PROJECT_NAME=ragdemo` del `.env`** ni uses `make clean`
+  (perderías la base y habría que re-ingestar con `docker compose run --rm app python -m
+  src.ingest "data/cessna_172_ocr.json"`).
+- Limpiar los fantasmas "de verdad" requeriría un *factory reset* de Docker Desktop (borra
+  TODOS los volúmenes) — no hace falta; con el nombre nuevo está resuelto.
 
 ## 🧰 Comandos útiles (para mostrar tu proceso, ver `COMO-TRABAJO-Y-LA-IA.md`)
 ```bash
