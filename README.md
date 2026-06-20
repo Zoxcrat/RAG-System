@@ -17,6 +17,9 @@ still correct and notes the trade-off.
 - **Hybrid retrieval**: semantic (vector) + lexical (full-text) search fused with
   Reciprocal Rank Fusion — so a fact buried in a dense table is found by meaning *or* by
   exact token (part numbers, codes), and you can search by part number directly.
+- **Aggregation questions** ("how many ribs?", "list all adhesives", "most common fastener?")
+  via a structured parts table + guarded text-to-SQL, routed by intent — the part of the
+  catalog that top-k retrieval can't answer on its own.
 - **Grounded answers** that cite `[página N]`, refusing to guess when the corpus has no
   relevant context (anti-hallucination relevance gate).
 - **Clickable citations**: the frontend parses `[página N]` and jumps the PDF viewer to
@@ -135,6 +138,13 @@ cross-encoder dependency), fails open (any error keeps the hybrid order), and ru
 after the relevance gate so out-of-domain queries cost no rerank call. Measured on the
 eval gold set: recall@5 0.73 → 0.91 and MRR@10 0.39 → 0.69 over hybrid alone.
 
+**Aggregation vs. lookup.** Retrieve-then-read can't answer "how many" / "list all" / "most
+common" — it only sees the top-k chunks, not the whole catalog. An intent router sends those
+to a structured `parts` table (parsed from the OCR) and answers with guarded text-to-SQL
+(read-only, single SELECT, `parts`-only, LIMIT), citing pages. If the SQL returns no rows
+(e.g. the column-split materials section), it falls back to the semantic path. Point lookups
+go straight to retrieval.
+
 **Refusing instead of guessing.** A retriever always returns *something*. If the closest chunk
 by cosine distance is farther than a threshold, the system skips the LLM call and answers an
 honest "not enough information". The gate stays vector-based even under hybrid search, so a
@@ -184,6 +194,8 @@ src/
   pdf_loader.py PDF → per-page OCR text (PyMuPDF + Tesseract), JSON cache
   embed.py      text → embedding vectors (OpenAI), batched ≤2048
   ingest.py     chunk-per-page → embed → store (idempotent, batched)
+  parts.py      structured parts extracted from the OCR (for aggregation queries)
+  aggregate.py  intent router + guarded text-to-SQL over the parts table
   retrieve.py   vector + full-text arms, Reciprocal Rank Fusion, hybrid search
   rerank.py     LLM reranker (listwise) over the hybrid candidates
   rag.py        prompt building, relevance gate, grounded generation with [página N]

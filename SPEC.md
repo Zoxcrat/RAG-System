@@ -25,6 +25,8 @@ there is no relevant information.
 - Vector storage and similarity search in PostgreSQL + PGVector.
 - **Hybrid retrieval**: vector (cosine k-NN) + lexical (Postgres full-text) fused with
   Reciprocal Rank Fusion, then an **LLM reranker** over the candidate pool.
+- **Aggregation path**: a structured `parts` table parsed from the OCR + intent routing +
+  guarded text-to-SQL, for count/list/most-common questions (with semantic fallback).
 - **Evaluation harness** (recall@k, MRR) over a curated gold set (`make eval`).
 - Grounded generation with an LLM, `[página N]` citations and an anti-hallucination
   relevance threshold.
@@ -68,6 +70,8 @@ db, embed, ingest, retrieve, rerank, rag, api ──► config ──► (enviro
 | `embed` | Convert text into vectors via OpenAI, batched (≤2048 inputs/request). The only point that calls the embeddings endpoint. |
 | `ingest` | Offline pipeline: text/OCR pages → chunking (per page) → batch embeddings → idempotent INSERT into `documents`. |
 | `retrieve` | Hybrid search: vector (cosine k-NN) + lexical (full-text) arms, fused with Reciprocal Rank Fusion. Returns chunks with metadata, page and distance. |
+| `parts` | Parses the OCR into a structured `parts` table (part_number, description, page, figure) for aggregation. |
+| `aggregate` | Intent router + guarded text-to-SQL over `parts` (count/list/group), with semantic fallback. |
 | `rerank` | Listwise LLM reranker over the hybrid candidates. Pure ranking parser + fail-open call. |
 | `rag` | Orchestrates the query phase: hybrid retrieve → gate → rerank → grounded prompt → LLM → response (answer + `[página N]` + pages). |
 | `api` | FastAPI app exposing `/health`, `/ask`, `/pdf` over HTTP (CORS for local dev). |

@@ -217,6 +217,11 @@ Primera corrida con `OPENAI_API_KEY` real. Detalle y teoría en
     antes del rerank; fail-open. Reusa `gpt-4o-mini` (sin cross-encoder/torch).
   - *Próximo en esta línea:* chunking estructural (por fila), query expansion para los
     casos que ni entran al pool (ej. radio shelf p202).
+- **Agregación HECHA (2026-06, ver [docs/15-agregacion-text-to-sql.md](docs/15-agregacion-text-to-sql.md)):**
+  preguntas de "cuántos / listá todos / el más común" (que el top-k no puede). Tabla `parts`
+  estructurada (7225 partes) + router de intención + **text-to-SQL con candados** (solo SELECT,
+  read-only, LIMIT) + **fallback** al semántico si la SQL no trae filas. Responde las preguntas
+  de agregación de la entrevista; las puntuales siguen yendo a híbrida+rerank.
 
 ---
 
