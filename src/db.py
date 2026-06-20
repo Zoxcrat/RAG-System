@@ -71,6 +71,20 @@ def init_schema(conn):
             ON documents (content_hash);
             """
         )
+        # Structured parts table for aggregation queries (count/list/group), which
+        # the semantic top-k path can't answer. One row per catalog part line; it is
+        # derived from the OCR and rebuilt wholesale on ingest (see src/parts.py).
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS parts (
+                id SERIAL PRIMARY KEY,
+                part_number TEXT,
+                description TEXT,
+                page_number INTEGER,
+                figure TEXT
+            );
+            """
+        )
     conn.commit()
 
 

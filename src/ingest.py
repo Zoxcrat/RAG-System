@@ -161,6 +161,11 @@ if __name__ == "__main__":
                 f"Ingested {n} new chunks from {json_path} "
                 f"({len(pages)} pages, source={source!r})"
             )
+            # Also (re)build the structured parts table for aggregation queries.
+            from src.parts import ingest_parts
+
+            n_parts = ingest_parts(conn, pages)
+            print(f"Extracted {n_parts} parts into the parts table")
         else:
             n = ingest_file(conn, SAMPLE_DOCS_PATH)
             print(f"Ingested {n} chunks from {SAMPLE_DOCS_PATH}")

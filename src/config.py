@@ -50,6 +50,13 @@ RETRIEVAL_CANDIDATES = _get_int("RETRIEVAL_CANDIDATES", 20)
 # results still contribute and one arm can't fully dominate.
 RRF_K = _get_int("RRF_K", 60)
 
+# --- Aggregation (structured parts table + text-to-SQL) ---
+# Route count/list/group questions to a SQL query over the parts table instead of
+# top-k semantic retrieval (which can't see the whole catalog at once).
+AGG_ENABLED = os.getenv("AGG_ENABLED", "true").lower() in ("1", "true", "yes")
+# Cap rows fed to the model when formatting the answer (keeps the prompt bounded).
+AGG_ROW_LIMIT = _get_int("AGG_ROW_LIMIT", 200)
+
 # --- Reranking ---
 # After hybrid retrieval, an LLM reranker reorders the candidates by relevance
 # (a cross-encoder-style step). It runs on this many candidates and narrows them

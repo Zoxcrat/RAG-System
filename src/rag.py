@@ -3,10 +3,12 @@ from typing import Optional
 from openai import OpenAI
 
 from src import config
+from src.aggregate import answer_aggregation, is_aggregation_query
 from src.db import get_connection
 from src.rerank import rerank
 from src.retrieve import retrieve_hybrid
 
+AGG_ENABLED = config.AGG_ENABLED
 LLM_MODEL = config.LLM_MODEL
 DEFAULT_TOP_K = config.DEFAULT_TOP_K
 TEMPERATURE = config.TEMPERATURE
@@ -107,6 +109,23 @@ def generate_answer(query: str, chunks: list[dict]) -> str:
 
 
 def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
+    # Route aggregation questions (count / list all / most common) to the structured
+    # parts table via text-to-SQL — the semantic path below only sees top_k chunks
+    # and can't answer "how many" or "list all" over the whole catalog.
+    if AGG_ENABLED and is_aggregation_query(query):
+        agg = answer_aggregation(conn, query)
+        # Only use the structured answer if SQL actually returned rows; otherwise
+        # fall through to semantic retrieval (e.g. the materials/adhesives section,
+        # which isn't captured in the parts table).
+        if agg["ok"]:
+            return {
+                "query": query,
+                "answer": agg["answer"],
+                "sources": [],
+                "pages": agg["pages"],
+                "min_distance": None,
+            }
+
     # Retrieve a wider candidate set, then rerank it down to top_k. The relevance
     # gate runs on the candidates first, so an out-of-domain query is refused
     # without spending a reranking call.
