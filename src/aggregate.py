@@ -73,9 +73,13 @@ def generate_sql(query: str) -> str:
         "- description is UPPERCASE OCR text, e.g. 'RIB ASSEMBLY-LH', 'SCREW', 'NUT'.\n"
         "- figure is the assembly/section a part belongs to, e.g. 'Wing Structure Assembly'.\n"
         "- Use ILIKE with % wildcards for text matching (descriptions vary).\n"
+        "- Count parts with COUNT(DISTINCT part_number); never restrict to a single page\n"
+        "  unless the question asks about one page.\n"
         "- To scope to a system, match figure, e.g. figure ILIKE '%wing%'.\n"
-        "- For 'most common type' style questions, GROUP BY a keyword and COUNT.\n"
-        "- Always include page_number in the SELECT so the answer can cite pages.\n"
+        "- For 'most common' questions, GROUP BY the relevant keyword across the WHOLE\n"
+        "  table and ORDER BY the count DESC (return the top groups, not one page).\n"
+        "- Always include page_number (or an aggregate of pages) so the answer can cite pages;\n"
+        "  for grouped queries use e.g. (array_agg(DISTINCT page_number))[1:3] AS page_number.\n"
         "Return ONLY the SQL: a single SELECT, no semicolon, no markdown, no explanation.",
         f"Question: {query}",
     )
@@ -150,8 +154,13 @@ def answer_aggregation(conn, query: str) -> dict:
         return {"ok": False, "answer": "", "sql": sql, "pages": []}
 
     answer = _format_answer(query, columns, rows)
-    pages = []
+    pages: set = set()
     if "page_number" in columns:
         idx = columns.index("page_number")
-        pages = sorted({r[idx] for r in rows if isinstance(r[idx], int)})
-    return {"ok": True, "answer": answer, "sql": sql, "pages": pages}
+        for row in rows:
+            value = row[idx]
+            if isinstance(value, int):
+                pages.add(value)
+            elif isinstance(value, (list, tuple)):  # array_agg(page_number) in grouped queries
+                pages.update(v for v in value if isinstance(v, int))
+    return {"ok": True, "answer": answer, "sql": sql, "pages": sorted(pages)}
