@@ -1,16 +1,4 @@
-"""Aggregation answers via text-to-SQL over the structured `parts` table.
-
-Top-k semantic retrieval can't answer "how many ribs?", "list all X" or "most
-common fastener?" — those need to see the whole catalog, not a slice. Since the
-catalog is structured data (see src/parts.py), we answer those by:
-
-  1. classifying the question as aggregation vs. lookup (router),
-  2. having the LLM write ONE read-only SELECT over `parts` (text-to-SQL),
-  3. running it behind strict guardrails (single SELECT, no writes, read-only txn, LIMIT),
-  4. having the LLM phrase the answer from the rows, citing pages as [página N].
-
-Guardrails matter: the model writes the SQL, so we never trust it blindly.
-"""
+"""Aggregation answers via text-to-SQL over the structured `parts` table."""
 import re
 from typing import Optional
 
@@ -25,7 +13,7 @@ SAMPLE_TEMPERATURE = config.AGG_SAMPLE_TEMPERATURE
 
 PARTS_SCHEMA = "parts(part_number TEXT, description TEXT, page_number INTEGER, figure TEXT)"
 
-# Anything that could mutate state or chain a second statement is rejected outright.
+# Reject anything that mutates state or chains a second statement.
 _FORBIDDEN = re.compile(
     r"\b(insert|update|delete|drop|alter|truncate|grant|revoke|create|copy|merge|into)\b",
     re.IGNORECASE,
@@ -53,8 +41,7 @@ def _chat(system: str, user: str, temperature: float = 0.0) -> str:
 # --- routing ---------------------------------------------------------------
 
 def is_aggregation_query(query: str) -> bool:
-    """True if the question needs aggregation over the whole catalog (count, list
-    all, most/least common, totals, grouping) rather than a single fact lookup."""
+    """True if the question needs aggregation over the whole catalog vs. a lookup."""
     answer = _chat(
         "You classify questions about an aircraft parts catalog. Answer with ONE word: "
         "AGGREGATE if the question needs to scan/aggregate the whole catalog (counting, "
@@ -93,7 +80,7 @@ def generate_sql(query: str, temperature: float = 0.0) -> str:
         f"Question: {query}",
         temperature=temperature,
     )
-    # strip markdown fences if the model added them
+    # strip markdown fences the model may have added
     sql = re.sub(r"```(?:sql)?", "", sql, flags=re.IGNORECASE).replace("```", "").strip()
     return sql
 
@@ -101,7 +88,7 @@ def generate_sql(query: str, temperature: float = 0.0) -> str:
 def is_safe_select(sql: str) -> bool:
     """Reject anything that isn't a single read-only SELECT over `parts`."""
     s = sql.strip().rstrip(";").strip()
-    if not s or ";" in s:  # exactly one statement
+    if not s or ";" in s:  # single statement only
         return False
     if not re.match(r"(?is)^\s*(select|with)\b", s):
         return False
@@ -117,7 +104,7 @@ def _with_limit(sql: str, limit: int) -> str:
 
 
 def run_select(conn, sql: str) -> tuple[list[str], list[tuple]]:
-    """Execute the SELECT in a read-only transaction (defense in depth)."""
+    """Execute the SELECT in a read-only transaction."""
     conn.set_session(readonly=True)
     try:
         with conn.cursor() as cur:
@@ -145,7 +132,7 @@ def _format_answer(query: str, columns: list[str], rows: list[tuple]) -> str:
 
 
 def _result_signature(columns: list[str], rows: list[tuple]) -> tuple:
-    """Order-independent signature of a result set, used for majority voting."""
+    """Order-independent signature of a result set, for majority voting."""
     return (tuple(columns), tuple(sorted(str(row) for row in rows)))
 
 
@@ -157,20 +144,17 @@ def _pages_from(columns: list[str], rows: list[tuple]) -> list[int]:
             value = row[idx]
             if isinstance(value, int):
                 pages.add(value)
-            elif isinstance(value, (list, tuple)):  # array_agg(page_number) in grouped queries
+            elif isinstance(value, (list, tuple)):  # array_agg from grouped queries
                 pages.update(v for v in value if isinstance(v, int))
     return sorted(pages)
 
 
 def answer_aggregation(conn, query: str) -> dict:
-    """Answer an aggregation question over the parts table, with self-consistency.
+    """Answer an aggregation question with self-consistency over sampled SQL.
 
-    Samples several SQL candidates (temperature > 0 for diversity), runs each, and
-    keeps the result the majority agree on — so a one-off bad query gets outvoted.
-    The winning SQL is returned so the UI can show exactly what was counted
-    (auditable). ``ok=False`` (no safe query ran, or the consensus is empty) tells
-    the caller to fall back to the semantic path — e.g. the adhesives live in a
-    column-split materials section the parts table doesn't capture.
+    Samples several SQL candidates, runs each, and keeps the result the majority
+    agree on. ok=False (no safe query ran or empty consensus) tells the caller to
+    fall back to the semantic path.
     """
     from collections import Counter
 
@@ -184,7 +168,7 @@ def answer_aggregation(conn, query: str) -> dict:
         sql = _with_limit(sql, ROW_LIMIT)
         try:
             columns, rows = run_select(conn, sql)
-        except Exception:  # noqa: BLE001 - a bad generated query simply doesn't get a vote
+        except Exception:  # noqa: BLE001 - a bad query just doesn't get a vote
             continue
         runs.append((sql, columns, rows))
 

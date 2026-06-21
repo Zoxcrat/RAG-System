@@ -1,32 +1,14 @@
-"""Structured extraction of catalog parts (for aggregation queries).
-
-The semantic RAG path (retrieve top-k -> answer) is great for point lookups but
-cannot answer aggregation/global questions ("how many ribs?", "list all X", "most
-common fastener?"), because it only ever sees a handful of chunks, not the whole
-document.
-
-A parts catalog is really *structured data*, so we parse the OCR text into one row
-per part — (part_number, description, page, figure) — and store it in a `parts`
-table. Aggregation questions then become ordinary SQL (count / group / filter),
-answered over the full catalog instead of a slice (see src/aggregate.py).
-
-Limitation: this line parser captures the main parts tables (part number and
-description on the same line). The "miscellaneous bulk / consumable materials"
-pages (adhesives, sealants) use a column-split layout the OCR breaks across lines,
-so those are better served by the semantic path.
-"""
+"""Parse OCR'd catalog text into structured part rows for aggregation queries."""
 import re
 from typing import Optional, TypedDict
 
-# A part line: a part-number token followed by an UPPERCASE description.
-# Part numbers are either Cessna-style (digits + optional -suffix) or standard
-# hardware (a few letters + digits + suffix), e.g. 0512029-8, NAS680A3, AN960-4.
+# Part-number token + UPPERCASE description. Numbers are Cessna-style (digits +
+# optional suffix) or standard hardware, e.g. 0512029-8, NAS680A3, AN960-4.
 _PART_RE = re.compile(
     r"^([0-9]{6,7}-?[0-9]{0,3}|[A-Z]{1,4}[0-9]{2,}[A-Z0-9-]*)\s+([A-Z][A-Z0-9 ./~&\-]{3,})"
 )
 
-# Figure captions give each part a section context ("Wing Structure Assembly"),
-# which is what lets a query scope to e.g. wing parts.
+# Figure captions give each part a section context ("Wing Structure Assembly").
 _FIG_RE = re.compile(r"Figure\s+(\d+[A-Z]?)\.?\s+(.+)", re.IGNORECASE)
 
 
@@ -43,11 +25,7 @@ def _clean(text: str) -> str:
 
 
 def extract_parts(pages: list[dict]) -> list[PartRecord]:
-    """Parse OCR'd pages [{page_number, text}] into structured part rows.
-
-    Each part inherits the most recent figure caption seen above it, so it carries
-    the assembly/section it belongs to.
-    """
+    """Parse OCR'd pages into part rows; each part inherits the figure above it."""
     records: list[PartRecord] = []
     current_figure: Optional[str] = None
 
@@ -78,11 +56,7 @@ def extract_parts(pages: list[dict]) -> list[PartRecord]:
 
 
 def ingest_parts(conn, pages: list[dict]) -> int:
-    """Rebuild the `parts` table from OCR'd pages. Returns the number of rows.
-
-    The table is derived data, so we replace it wholesale (TRUNCATE + insert) —
-    that keeps it idempotent and always in sync with the current OCR.
-    """
+    """Rebuild the `parts` table from OCR'd pages. Returns the row count."""
     from psycopg2.extras import execute_values
 
     records = extract_parts(pages)

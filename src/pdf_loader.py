@@ -1,14 +1,4 @@
-"""PDF text extraction via OCR.
-
-The aviation parts catalog is a scanned document that ships with only a partial
-OCR layer, so the embedded text is unreliable. Instead of trusting it, we render
-each page to an image at a controlled resolution and run a modern OCR engine
-(Tesseract) over the rendered image.
-
-OCR of ~600 pages is slow (seconds per page), so the extracted text is cached to
-a JSON file (see ``save_extracted_text`` / ``load_extracted_text``). Downstream
-steps (chunking, embedding) read the cache and never need to re-run OCR.
-"""
+"""PDF text extraction via Tesseract OCR, cached to JSON to avoid re-running."""
 import io
 import json
 import os
@@ -21,31 +11,23 @@ from PIL import Image
 
 
 class ExtractedPage(TypedDict):
-    """One OCR'd page. ``page_number`` is 1-based to match how humans cite pages."""
+    """One OCR'd page; page_number is 1-based."""
 
     page_number: int
     text: str
 
 
-# 200 DPI gives Tesseract enough detail to read small part numbers on these
-# scans without blowing up image size (and OCR time). 300 DPI reads slightly
-# better at a meaningful speed cost; expose ``dpi`` so it can be tuned per PDF.
+# Enough detail to read small part numbers without blowing up OCR time.
 DEFAULT_DPI = 200
 
-# PDF user space is 72 units per inch, so the render zoom factor is dpi / 72.
+# PDF user space is 72 units per inch; zoom = dpi / 72.
 PDF_POINTS_PER_INCH = 72
 
-# Test PDF that already lives in the repo, used as the default in __main__.
-# Lives under data/ so it is copied into the Docker image (see Dockerfile).
 DEFAULT_PDF_PATH = "data/Cessna 172 Parts Catalog (1963-1974).pdf"
 
 
 def _check_tesseract_available() -> None:
-    """Fail fast with an actionable message if the Tesseract binary is missing.
-
-    Without this, every single page would raise inside the per-page handler and
-    we'd silently get ~600 empty pages plus 600 confusing error lines.
-    """
+    """Fail fast with an install hint if the Tesseract binary is missing."""
     try:
         pytesseract.get_tesseract_version()
     except (pytesseract.TesseractNotFoundError, EnvironmentError) as exc:
@@ -58,11 +40,10 @@ def _check_tesseract_available() -> None:
 
 
 def _render_page_to_image(page: "fitz.Page", dpi: int) -> Image.Image:
-    """Render a single PDF page to a PIL image at the requested DPI.
+    """Render a PDF page to a PIL image at the requested DPI.
 
-    We go through a PNG byte buffer rather than reading ``pixmap.samples``
-    directly so the conversion is correct regardless of the page's color space
-    or alpha channel. The encode/decode cost is negligible next to OCR.
+    Goes through a PNG buffer so the conversion is correct regardless of the
+    page's color space or alpha channel.
     """
     zoom = dpi / PDF_POINTS_PER_INCH
     matrix = fitz.Matrix(zoom, zoom)
@@ -78,16 +59,7 @@ def extract_pages_from_pdf(
 ) -> list[ExtractedPage]:
     """Render each page of ``pdf_path`` and OCR it into plain text.
 
-    Args:
-        pdf_path: Path to the (scanned) PDF.
-        dpi: Render resolution. Higher = better OCR, slower, larger images.
-        max_pages: If set, only process the first N pages (handy for quick tests).
-        lang: Tesseract language pack(s), e.g. "eng" or "eng+spa".
-
-    Returns:
-        One dict per processed page with keys ``page_number`` (1-based int) and
-        ``text`` (str). A page whose OCR fails contributes empty text instead of
-        aborting the whole run.
+    A page whose OCR fails contributes empty text instead of aborting the run.
     """
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
@@ -103,8 +75,7 @@ def extract_pages_from_pdf(
             page_number = page_index + 1
             print(f"Processing page {page_number}/{num_pages}...")
 
-            # Per-page isolation: one bad page (corrupt image, OCR crash) must not
-            # throw away the OCR work already done on the other pages.
+            # Isolate per page so one bad page doesn't abort the run.
             try:
                 image = _render_page_to_image(doc[page_index], dpi)
                 text = pytesseract.image_to_string(image, lang=lang).strip()
@@ -121,11 +92,7 @@ def extract_pages_from_pdf(
 
 
 def save_extracted_text(pages: list[ExtractedPage], output_path: str) -> None:
-    """Persist OCR results to JSON so OCR runs at most once per PDF.
-
-    ``ensure_ascii=False`` keeps accented characters readable in the file; the
-    indentation makes it easy to eyeball OCR quality while debugging.
-    """
+    """Persist OCR results to JSON so OCR runs at most once per PDF."""
     parent = os.path.dirname(output_path)
     if parent:
         os.makedirs(parent, exist_ok=True)
@@ -141,8 +108,6 @@ def load_extracted_text(input_path: str) -> list[ExtractedPage]:
 
 
 if __name__ == "__main__":
-    # Quick visual check: OCR the first few pages of a PDF and print a preview of
-    # each so we can confirm the engine is actually reading the scans.
     # Usage: python -m src.pdf_loader [path/to/file.pdf]
     pdf_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PDF_PATH
     preview_chars = 300

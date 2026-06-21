@@ -8,7 +8,7 @@ def _chunk(cid, distance=None):
             "chunk_index": cid, "page_number": cid, "distance": distance}
 
 
-# --- pure: Reciprocal Rank Fusion -------------------------------------------
+# --- Reciprocal Rank Fusion --------------------------------------------------
 
 def test_rrf_rewards_documents_ranked_by_both_arms():
     vector = [_chunk(1, 0.1), _chunk(2, 0.2)]
@@ -16,7 +16,7 @@ def test_rrf_rewards_documents_ranked_by_both_arms():
 
     fused = reciprocal_rank_fusion([vector, keyword], top_k=3, rrf_k=1)
 
-    # id 2 appears in both arms -> highest combined score, ranks first.
+    # id 2 is in both arms -> ranks first
     assert [c["id"] for c in fused] == [2, 1, 3]
 
 
@@ -29,8 +29,7 @@ def test_rrf_respects_top_k():
 
 
 def test_rrf_keeps_variant_carrying_a_distance():
-    # keyword arm (distance=None) is seen BEFORE the vector arm for id 5;
-    # fusion must keep the vector variant so the gate still has a distance.
+    # when a chunk appears in both arms, keep the variant with a distance
     keyword = [_chunk(5, None)]
     vector = [_chunk(5, 0.42)]
 
@@ -83,6 +82,6 @@ def test_keyword_search_uses_fulltext_and_returns_none_distance():
     assert "tsv @@ q" in sql
     assert "ts_rank" in sql
     assert params == ("headliner hanger", 20)
-    # keyword-only hits carry no cosine distance (gate stays vector-based)
+    # keyword-only hits carry no cosine distance
     assert results[0]["distance"] is None
     assert results[0]["page_number"] == 201

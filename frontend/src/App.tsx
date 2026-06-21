@@ -2,8 +2,7 @@ import { Suspense, lazy, useState } from 'react';
 import { AskPanel } from './components/AskPanel';
 import './App.css';
 
-// Lazy-load the viewer so the heavy PDF.js bundle is a separate chunk, fetched
-// only when the app mounts the viewer (keeps the initial JS payload smaller).
+// Lazy-load so PDF.js lands in its own chunk.
 const PdfViewer = lazy(() =>
   import('./components/PdfViewer').then((m) => ({ default: m.PdfViewer })),
 );

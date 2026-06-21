@@ -1,15 +1,9 @@
-"""Retrieval evaluation: vector-only vs hybrid vs hybrid+rerank on a gold set.
+"""Retrieval eval: vector vs hybrid vs hybrid+rerank vs expand+rerank on a gold set.
 
-Metrics (over in_domain items):
-  - recall@k : fraction of questions where a correct page appears in the top-k.
-  - MRR@k    : mean of 1/(rank of the first chunk on a correct page), 0 if none in top-k.
-Out_of_domain items check the relevance gate actually refuses.
+Reports recall@k and MRR@k over in-domain items; out-of-domain items check the
+relevance gate refuses.
 
-All three arms are compared on the SAME candidate pool: vector top-10, the hybrid
-fusion's top-10, and that same fused pool reranked down to 10.
-
-Run inside the container (needs the DB + OPENAI_API_KEY for embeddings + reranking):
-  docker compose run --rm --entrypoint python app -m eval.evaluate     # or: make eval
+Run: docker compose run --rm --entrypoint python app -m eval.evaluate  (or: make eval)
 """
 import json
 
@@ -34,7 +28,7 @@ def _first_hit_rank(chunks: list[dict], gold_pages: set) -> int | None:
 
 
 def _score_arm(top10: dict[str, list[dict]]) -> dict:
-    """recall@k and MRR@k for every k in K_VALUES from cached top-10 lists."""
+    """recall@k and MRR@k for every k in K_VALUES."""
     out = {}
     for k in K_VALUES:
         hits = rr = 0.0
@@ -50,8 +44,6 @@ def _score_arm(top10: dict[str, list[dict]]) -> dict:
 def main() -> None:
     conn = get_connection()
     try:
-        # Same candidate pool for every arm: vector top-10, the hybrid fusion's
-        # top-10, and that fused pool reranked down to 10.
         top10 = {arm: {} for arm in ARMS}
         for item in IN_DOMAIN:
             q = item["question"]

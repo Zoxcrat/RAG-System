@@ -1,4 +1,4 @@
-// Mirrors the FastAPI /ask response (src/api.py: AskResponse / Source).
+// Mirrors src/api.py: AskResponse / Source.
 export interface Source {
   id: number;
   source: string | null;
@@ -13,7 +13,7 @@ export interface AskResponse {
   sources: Source[];
   pages: number[];
   min_distance: number | null;
-  // "lookup" (semantic) or "aggregate" (structured); sql is shown for transparency.
+  // "lookup" or "aggregate".
   mode?: string;
   sql?: string | null;
 }

@@ -26,12 +26,10 @@ def embed_text(text: str) -> list[float]:
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
-    """Embed many texts, batching to stay within the API's per-request limits.
+    """Embed many texts, batching to stay within the API's per-request limit.
 
-    OpenAI's embeddings endpoint accepts at most 2048 inputs per request, so we
-    split into batches of EMBED_BATCH_SIZE. Each response's ``index`` is relative
-    to its own batch, so we sort within the batch and append in batch order to
-    preserve the global input order.
+    Each response index is batch-relative, so we sort within the batch and append
+    in batch order to preserve global input order.
     """
     if not texts:
         return []

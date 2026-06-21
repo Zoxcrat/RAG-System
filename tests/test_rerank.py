@@ -3,14 +3,14 @@ import src.rerank as rerank_mod
 from src.rerank import _parse_ranking, rerank
 
 
-# --- pure: parsing the model's ranking into a full permutation ---------------
+# --- parsing the model's ranking into a full permutation ---------------------
 
 def test_parse_full_ranking_is_zero_based():
     assert _parse_ranking("[3,1,2]", 3) == [2, 0, 1]
 
 
 def test_parse_appends_omitted_passages_in_order():
-    # model only ranked passage 2 -> the rest follow in their original order
+    # only passage 2 ranked -> rest follow in original order
     assert _parse_ranking("[2]", 3) == [1, 0, 2]
 
 

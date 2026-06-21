@@ -23,8 +23,7 @@ def _row_to_dict(row, distance) -> dict:
 
 
 def retrieve(conn, query: str, top_k: int = DEFAULT_TOP_K) -> list[dict]:
-    """Vector-only retrieval (kNN by cosine distance). Kept as the semantic arm
-    and for comparison; ``ask`` uses :func:`retrieve_hybrid`."""
+    """Vector-only retrieval (kNN by cosine distance)."""
     query_embedding = embed_text(query)
     vec = _to_vector_literal(query_embedding)
 
@@ -47,17 +46,13 @@ def retrieve(conn, query: str, top_k: int = DEFAULT_TOP_K) -> list[dict]:
 def _keyword_search(conn, query: str, limit: int) -> list[dict]:
     """Lexical arm: Postgres full-text search over the generated ``tsv`` column.
 
-    Matches literal tokens (part numbers, words like HEADLINER) that a dense
-    embedding can bury inside a large, noisy chunk. ``websearch_to_tsquery`` is
-    forgiving of arbitrary user input. ``distance`` is None: a keyword-only hit
-    has no cosine distance, and the relevance gate must stay vector-based.
+    distance is None: a keyword-only hit has no cosine distance, and the relevance
+    gate stays vector-based.
     """
     with conn.cursor() as cur:
-        # OR semantics: rewrite websearch_to_tsquery's default AND ('a & b') into
-        # OR ('a | b'). AND is too strict here because chunking by a 500-char window
-        # can split a generic term (PART NUMBER header) from the specific one
-        # (HANGER HEADLINER row). With OR, ts_rank still ranks chunks matching more
-        # terms higher, and the vector arm + relevance gate keep precision.
+        # Rewrite the default AND into OR: 500-char chunking can split a generic
+        # term from the specific one, and AND would miss those. ts_rank still
+        # ranks chunks matching more terms higher.
         cur.execute(
             """
             WITH q AS (
@@ -79,20 +74,18 @@ def _keyword_search(conn, query: str, limit: int) -> list[dict]:
 
 
 def _vector_search(conn, query: str, limit: int) -> list[dict]:
-    """Semantic arm: same as :func:`retrieve`, named for symmetry with the hybrid flow."""
+    """Semantic arm; alias of :func:`retrieve` for symmetry with the hybrid flow."""
     return retrieve(conn, query, top_k=limit)
 
 
 def reciprocal_rank_fusion(
     ranked_lists: list[list[dict]], top_k: int, rrf_k: int = RRF_K
 ) -> list[dict]:
-    """Fuse several ranked lists into one via Reciprocal Rank Fusion (RRF).
+    """Fuse ranked lists via Reciprocal Rank Fusion: score = sum(1 / (rrf_k + rank)).
 
-    Score of a document = sum over lists of 1 / (rrf_k + rank), with rank 1-based.
-    RRF uses only ranks, not scores, so it combines arms whose scores are not
-    comparable (cosine distance vs ts_rank) without any normalization. Documents
-    are keyed by id; we keep the variant that carries a cosine distance so the
-    relevance gate downstream still has it.
+    Uses ranks only, so it combines arms with incomparable scores (cosine vs
+    ts_rank) without normalization. Keyed by id, keeping the variant that carries
+    a cosine distance for the downstream relevance gate.
     """
     scores: dict = {}
     payload: dict = {}
@@ -115,11 +108,9 @@ def retrieve_hybrid(
     top_k: int = DEFAULT_TOP_K,
     candidates: int = RETRIEVAL_CANDIDATES,
 ) -> list[dict]:
-    """Hybrid retrieval: fuse a semantic (vector) and a lexical (keyword) arm.
+    """Hybrid retrieval: fuse the vector and keyword arms with RRF into top_k.
 
-    Each arm returns ``candidates`` results; RRF fuses them into the final top_k.
-    This rescues facts that are semantically buried but lexically present (and
-    vice versa), which pure vector search misses on dense catalog tables.
+    Rescues facts that are semantically buried but lexically present, and vice versa.
     """
     vector_results = _vector_search(conn, query, candidates)
     keyword_results = _keyword_search(conn, query, candidates)
@@ -132,11 +123,8 @@ def retrieve_multi(
     top_k: int = DEFAULT_TOP_K,
     candidates: int = RETRIEVAL_CANDIDATES,
 ) -> list[dict]:
-    """Multi-query retrieval (RAG-Fusion): expand the question into a few phrasings,
-    run hybrid retrieval for each, and fuse all the ranked lists with RRF.
-
-    More angles on the same question rescue chunks that one phrasing would miss.
-    With a single query (expansion disabled/failed) this is just ``retrieve_hybrid``.
+    """Multi-query (RAG-Fusion): expand into a few phrasings, retrieve hybrid for
+    each, and fuse with RRF. Falls back to ``retrieve_hybrid`` for a single query.
     """
     from src.expand import expand_query
 

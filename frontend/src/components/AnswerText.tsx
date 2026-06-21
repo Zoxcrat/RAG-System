@@ -3,12 +3,11 @@ import { parseAnswer } from '../citations';
 interface Props {
   answer: string;
   onCite: (page: number) => void;
-  // The page currently shown in the viewer; its citation(s) get highlighted.
+  // Highlighted citation page.
   activePage?: number;
 }
 
-// Renders the answer text, turning every "[página N]" token into a button that
-// jumps the viewer to page N. Plain text is rendered as-is.
+// Renders answer text with "[página N]" tokens as page-jump buttons.
 export function AnswerText({ answer, onCite, activePage }: Props) {
   const segments = parseAnswer(answer);
 

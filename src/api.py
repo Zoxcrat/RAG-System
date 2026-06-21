@@ -1,14 +1,4 @@
-"""HTTP API for the RAG system (FastAPI).
-
-Turns the Python pipeline into a service the browser can call:
-- GET  /health  liveness probe
-- POST /ask     question -> grounded answer + page citations + source chunks
-- GET  /pdf     serves the source PDF so the frontend viewer can render it
-
-The /ask response is the contract the frontend depends on; in particular each
-source carries its page_number and `pages` lists the pages backing the answer,
-which is what makes citations jump to the right page in the viewer.
-"""
+"""FastAPI HTTP layer for the RAG pipeline: /health, /ask, /pdf."""
 import os
 from typing import Optional
 
@@ -23,8 +13,7 @@ from src.rag import ask
 
 app = FastAPI(title="Aviation Parts RAG API", version="0.1.0")
 
-# The browser blocks cross-origin requests by default; in dev the React app runs
-# on a different port than this API, so we have to allow it explicitly.
+# In dev the React app runs on a different port, so allow cross-origin explicitly.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
@@ -58,11 +47,7 @@ class AskResponse(BaseModel):
 
 
 def get_db():
-    """Open a Postgres connection per request and always close it.
-
-    Simple and correct for this scale; a connection pool would be the next step
-    if concurrency grew.
-    """
+    """Open a Postgres connection per request and always close it."""
     conn = get_connection()
     try:
         yield conn
@@ -84,7 +69,7 @@ def ask_endpoint(req: AskRequest, conn=Depends(get_db)) -> dict:
     top_k = config.DEFAULT_TOP_K if req.top_k is None else req.top_k
     try:
         return ask(conn, query, top_k)
-    except Exception as exc:  # surface a clean JSON error instead of a bare 500
+    except Exception as exc:  # clean JSON error instead of a bare 500
         raise HTTPException(status_code=500, detail=f"Failed to answer: {exc}")
 
 

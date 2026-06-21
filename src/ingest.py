@@ -12,8 +12,7 @@ CHUNK_SIZE = config.CHUNK_SIZE
 CHUNK_OVERLAP = config.CHUNK_OVERLAP
 SAMPLE_DOCS_PATH = "data/sample_docs.txt"
 
-# A chunk before embedding: (content, source, chunk_index, page_number).
-# page_number is None for plain-text documents that have no pages.
+# (content, source, chunk_index, page_number); page_number is None for plain text.
 ChunkRecord = tuple[str, str, int, Optional[int]]
 
 
@@ -43,28 +42,24 @@ def _to_vector_literal(embedding: list[float]) -> str:
 def _content_hash(source: str, page_number: Optional[int], content: str) -> str:
     """Dedup key for a chunk.
 
-    Includes source and page_number (not just the text) so that identical
-    boilerplate appearing on different pages — common in a scanned catalog with
-    repeated headers/footers — is stored as distinct, citable rows instead of
-    collapsing into one. Re-ingesting the same document still yields the same
-    hashes, so ingestion stays idempotent via ON CONFLICT DO NOTHING.
+    Includes source and page_number so identical boilerplate on different pages
+    stays as distinct, citable rows. Stable across re-ingestion, so ON CONFLICT
+    DO NOTHING keeps ingestion idempotent.
     """
     key = "\x00".join([source, str(page_number), content])
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
 def _records_from_text(text: str, source: str) -> list[ChunkRecord]:
-    """Plain-text document → chunk records with no page number."""
+    """Plain-text document -> chunk records with no page number."""
     return [(chunk, source, i, None) for i, chunk in enumerate(chunk_text(text))]
 
 
 def _records_from_pages(pages: list[dict], source: str) -> list[ChunkRecord]:
-    """OCR'd pages → chunk records.
+    """OCR'd pages -> chunk records.
 
-    Each page is chunked independently, so every chunk carries the page_number it
-    came from and one chunk never spans two pages — exactly what citing an exact
-    page needs. chunk_index runs across the whole document; pages whose OCR text
-    is empty contribute nothing.
+    Each page is chunked independently so no chunk spans two pages and each keeps
+    its page_number. chunk_index runs across the whole document.
     """
     records: list[ChunkRecord] = []
     chunk_index = 0
@@ -77,9 +72,7 @@ def _records_from_pages(pages: list[dict], source: str) -> list[ChunkRecord]:
 
 
 def _store_records(conn, records: list[ChunkRecord]) -> int:
-    """Embed every record's content in one batch and insert, skipping duplicates
-    by content_hash. Returns the number of NEW rows inserted.
-    """
+    """Batch-embed and insert records, skipping content_hash duplicates. Returns new rows."""
     if not records:
         return 0
 
@@ -101,10 +94,8 @@ def _store_records(conn, records: list[ChunkRecord]) -> int:
     ]
 
     with conn.cursor() as cur:
-        # fetch=True returns the RETURNING rows across all of execute_values'
-        # internal pages; with ON CONFLICT DO NOTHING only actually-inserted rows
-        # come back, so its length is an accurate new-row count. (cur.rowcount
-        # would report only the last internal page, under-counting large inserts.)
+        # fetch=True collects RETURNING rows across all internal pages, so its
+        # length is an accurate new-row count; cur.rowcount only sees the last page.
         returned = execute_values(
             cur,
             """
@@ -123,22 +114,14 @@ def _store_records(conn, records: list[ChunkRecord]) -> int:
 
 
 def ingest_file(conn, path: str) -> int:
-    """Embed and store every chunk of a plain-text file. Returns NEW rows.
-
-    Idempotent: chunks already present (same content_hash) are skipped. Plain
-    text has no pages, so page_number is stored as NULL.
-    """
+    """Embed and store a plain-text file's chunks (page_number NULL). Returns new rows."""
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
     return _store_records(conn, _records_from_text(text, os.path.basename(path)))
 
 
 def ingest_pages(conn, pages: list[dict], source: str) -> int:
-    """Embed and store OCR'd pages (a list of {page_number, text} dicts).
-
-    Each chunk keeps the page_number it came from, which is what later lets a
-    citation jump to the exact page. Idempotent. Returns the number of NEW rows.
-    """
+    """Embed and store OCR'd pages, keeping each chunk's page_number. Returns new rows."""
     return _store_records(conn, _records_from_pages(pages, source))
 
 
@@ -149,7 +132,6 @@ if __name__ == "__main__":
     try:
         init_schema(conn)
         if len(sys.argv) > 1:
-            # Ingest OCR'd pages from a JSON produced by src.pdf_loader.
             # Usage: python -m src.ingest <pages.json> [source_name]
             from src.pdf_loader import load_extracted_text
 
@@ -161,7 +143,7 @@ if __name__ == "__main__":
                 f"Ingested {n} new chunks from {json_path} "
                 f"({len(pages)} pages, source={source!r})"
             )
-            # Also (re)build the structured parts table for aggregation queries.
+            # Rebuild the structured parts table for aggregation queries.
             from src.parts import ingest_parts
 
             n_parts = ingest_parts(conn, pages)

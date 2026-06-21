@@ -1,9 +1,8 @@
 import type { AskResponse } from './types';
 
-// Backend base URL; override with VITE_API_BASE (see .env.example).
+// Override with VITE_API_BASE.
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
 
-// The PDF served by the backend (GET /pdf), consumed by the viewer.
 export const PDF_URL = `${API_BASE}/pdf`;
 
 export async function ask(query: string, topK?: number): Promise<AskResponse> {
@@ -14,7 +13,7 @@ export async function ask(query: string, topK?: number): Promise<AskResponse> {
   });
 
   if (!res.ok) {
-    // FastAPI returns {"detail": ...} on errors; surface it when possible.
+    // Surface FastAPI's {"detail": ...} when present.
     let detail = `Request failed (HTTP ${res.status})`;
     try {
       const body = await res.json();

@@ -32,7 +32,7 @@ def test_with_limit_adds_only_when_absent():
 def test_result_signature_is_order_independent():
     cols = ["type", "n"]
     a = _result_signature(cols, [("screw", 98), ("rivet", 14)])
-    b = _result_signature(cols, [("rivet", 14), ("screw", 98)])  # same rows, different order
+    b = _result_signature(cols, [("rivet", 14), ("screw", 98)])  # reordered
     c = _result_signature(cols, [("screw", 99), ("rivet", 14)])  # different count
-    assert a == b   # voting treats these as the same result
+    assert a == b
     assert a != c

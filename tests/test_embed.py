@@ -3,7 +3,7 @@ import src.embed as embed_mod
 
 
 class FakeDatum:
-    """Mimics one item of OpenAI's embeddings response: .index + .embedding."""
+    """One item of an embeddings response: .index + .embedding."""
 
     def __init__(self, index: int, embedding: list[float]):
         self.index = index
@@ -20,10 +20,8 @@ class FakeEmbeddings:
         self._recorder = recorder
 
     def create(self, model, input):
-        # Record the size of each request so tests can assert how we batched.
         self._recorder.append(len(input))
-        # Return the data in REVERSED index order to prove embed_texts sorts by
-        # .index before returning (the API does not guarantee response order).
+        # reversed order: embed_texts must sort by .index before returning
         data = [FakeDatum(i, [float(i)]) for i in range(len(input))]
         return FakeResponse(list(reversed(data)))
 
@@ -64,12 +62,12 @@ def test_embed_texts_splits_into_batches(monkeypatch):
 
     assert calls == [2, 2, 1]                # batched by size, last batch partial
     assert len(out) == 5                     # every input still gets an embedding
-    # Batches are appended in order; each batch's indices restart at 0.
+    # batches appended in order; each batch's indices restart at 0
     assert out == [[0.0], [1.0], [0.0], [1.0], [0.0]]
 
 
 def test_embed_texts_never_exceeds_api_limit(monkeypatch):
-    """The whole point of the fix: stay under OpenAI's 2048-inputs-per-request cap."""
+    """Stay under the 2048-inputs-per-request cap."""
     calls: list[int] = []
     _patch_client(monkeypatch, calls)
 

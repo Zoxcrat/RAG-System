@@ -1,15 +1,4 @@
-"""LLM-based reranking of retrieved candidates.
-
-Hybrid retrieval is fast but its ordering is imperfect: a relevant chunk can land
-deep in the candidate list (good recall, mediocre rank). A reranker re-scores each
-(query, passage) pair jointly — far more accurate than comparing embeddings
-separately — and reorders. It is expensive, so it runs only on a small candidate set.
-
-We reuse the chat model as a *listwise* reranker (one call: ask it to order the
-numbered passages) instead of pulling in a local cross-encoder (torch) just for this.
-The parsing is defensive and the call fails open (keep the hybrid order on any error),
-so reranking can only help, never break an answer.
-"""
+"""Listwise LLM reranking of retrieved candidates. Fails open to the hybrid order."""
 import re
 from typing import Optional
 
@@ -52,16 +41,15 @@ def _build_rerank_prompt(query: str, chunks: list[dict]) -> tuple[str, str]:
 def _parse_ranking(text: str, n: int) -> list[int]:
     """Parse the model's reply into a full 0-based permutation of range(n).
 
-    Tolerant by design: reads the integers from the first JSON-looking array (or
-    the whole reply), keeps the valid in-range ones in order without duplicates,
-    then appends any passage the model omitted in its original position. This way
-    a hallucinated, partial, or malformed ranking can never drop a candidate.
+    Tolerant: keeps valid in-range integers in order without duplicates, then
+    appends any omitted passage in its original position, so a malformed ranking
+    can never drop a candidate.
     """
     match = re.search(r"\[[^\]]*\]", text)
     source = match.group(0) if match else text
     order: list[int] = []
     for token in re.findall(r"\d+", source):
-        idx = int(token) - 1  # the prompt numbers passages from 1
+        idx = int(token) - 1  # prompt numbers passages from 1
         if 0 <= idx < n and idx not in order:
             order.append(idx)
     for idx in range(n):
@@ -71,10 +59,7 @@ def _parse_ranking(text: str, n: int) -> list[int]:
 
 
 def rerank(query: str, chunks: list[dict], top_k: int) -> list[dict]:
-    """Reorder ``chunks`` by relevance to ``query`` and return the top_k.
-
-    Fails open: any API/parse error keeps the input order (truncated to top_k).
-    """
+    """Reorder ``chunks`` by relevance and return the top_k; keeps input order on error."""
     if not chunks:
         return []
 
@@ -89,7 +74,7 @@ def rerank(query: str, chunks: list[dict], top_k: int) -> list[dict]:
             ],
         )
         order = _parse_ranking(response.choices[0].message.content or "", len(chunks))
-    except Exception:  # noqa: BLE001 - reranking is best-effort; never break the answer
+    except Exception:  # noqa: BLE001 - best-effort
         order = list(range(len(chunks)))
 
     return [chunks[i] for i in order[:top_k]]

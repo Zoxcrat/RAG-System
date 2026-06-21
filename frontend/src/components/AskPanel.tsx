@@ -31,7 +31,7 @@ export function AskPanel({ onGoToPage, currentPage }: Props) {
     try {
       const res = await ask(q);
       setResult(res);
-      // Jump to the first page the answer actually cites, if any.
+      // Jump to the first cited page.
       const firstCitation = parseAnswer(res.answer).find((s) => s.type === 'citation');
       if (firstCitation?.type === 'citation') onGoToPage(firstCitation.page);
     } catch (err) {
@@ -48,7 +48,7 @@ export function AskPanel({ onGoToPage, currentPage }: Props) {
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    // Cmd/Ctrl+Enter submits; plain Enter keeps inserting newlines.
+    // Cmd/Ctrl+Enter submits.
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       void submitQuery();

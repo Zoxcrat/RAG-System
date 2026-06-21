@@ -32,17 +32,12 @@ def init_schema(conn):
             );
             """
         )
-        # Backward-compatible migration for tables created before content_hash existed.
+        # Migrations for columns added after the table first shipped.
         cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash TEXT;")
-        # Same, for page_number (added when ingesting OCR'd PDFs page by page).
         cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS page_number INTEGER;")
-        # Full-text vector for hybrid retrieval (vector + keyword). A STORED
-        # GENERATED column stays in sync with content automatically and is computed
-        # for existing rows when added, so enabling hybrid search needs no re-ingest.
-        # We strip OCR noise characters (~ = |) that the scan glues onto words
-        # ("HANGER~HEADLINER") first: left in, they corrupt tokenization (the lexeme
-        # becomes '~headliner' and never matches 'headliner'). Hyphens are kept —
-        # the parser already indexes part numbers like 0512029-8 both whole and split.
+        # Full-text vector for hybrid retrieval. Strip OCR noise chars (~ = | `) first:
+        # left in, they corrupt tokenization ('~headliner' never matches 'headliner').
+        # Hyphens are kept so part numbers like 0512029-8 index both whole and split.
         cur.execute(
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS tsv tsvector "
             "GENERATED ALWAYS AS "
@@ -56,24 +51,22 @@ def init_schema(conn):
             USING hnsw (embedding vector_cosine_ops);
             """
         )
-        # GIN index makes the @@ full-text match fast (the keyword arm of hybrid search).
+        # GIN index for fast @@ full-text matching.
         cur.execute(
             """
             CREATE INDEX IF NOT EXISTS documents_tsv_gin_idx
             ON documents USING GIN (tsv);
             """
         )
-        # Dedup key: the same chunk text is never stored twice, which makes
-        # re-running ingestion idempotent (paired with ON CONFLICT in ingest.py).
+        # Dedup key making re-ingestion idempotent (paired with ON CONFLICT in ingest.py).
         cur.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS documents_content_hash_uidx
             ON documents (content_hash);
             """
         )
-        # Structured parts table for aggregation queries (count/list/group), which
-        # the semantic top-k path can't answer. One row per catalog part line; it is
-        # derived from the OCR and rebuilt wholesale on ingest (see src/parts.py).
+        # Structured parts table for aggregation queries. One row per catalog part
+        # line, rebuilt from OCR on ingest (see src/parts.py).
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS parts (

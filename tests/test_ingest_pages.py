@@ -2,7 +2,7 @@ import src.ingest as ingest_mod
 from src.ingest import _content_hash, _records_from_pages, _records_from_text
 
 
-# --- pure: building chunk records from pages --------------------------------
+# --- building chunk records from pages --------------------------------------
 
 def test_records_from_pages_attach_page_number_and_running_index():
     pages = [
@@ -19,7 +19,7 @@ def test_records_from_pages_attach_page_number_and_running_index():
 
 
 def test_records_from_pages_running_index_across_multi_chunk_pages():
-    text = "x" * 1200  # > CHUNK_SIZE -> several chunks per page at the defaults
+    text = "x" * 1200  # > CHUNK_SIZE
     pages = [{"page_number": 7, "text": text}, {"page_number": 8, "text": text}]
 
     records = _records_from_pages(pages, "s")
@@ -53,14 +53,14 @@ def test_records_from_text_has_no_page_number():
     assert (content, source, idx, page) == ("hello world", "doc.txt", 0, None)
 
 
-# --- pure: content hash includes source + page_number -----------------------
+# --- content hash includes source + page_number -----------------------------
 
 def test_content_hash_is_stable():
     assert _content_hash("s", 1, "abc") == _content_hash("s", 1, "abc")
 
 
 def test_content_hash_distinguishes_page_number():
-    # same text on different pages must NOT collide: both have to stay citable
+    # same text on different pages must not collide
     assert _content_hash("s", 1, "abc") != _content_hash("s", 2, "abc")
 
 
@@ -72,7 +72,7 @@ def test_content_hash_distinguishes_none_page_from_numbered():
     assert _content_hash("s", None, "abc") != _content_hash("s", 1, "abc")
 
 
-# --- insert path (mocked embeddings + DB, no API key or database) -----------
+# --- insert path (mocked embeddings + DB) -----------------------------------
 
 class FakeCursor:
     def __init__(self):
@@ -98,10 +98,7 @@ class FakeConn:
 
 
 def _patch_io(monkeypatch):
-    """Mock embeddings and the SQL insert so the test needs no API key or DB.
-
-    Returns a dict that captures the execute_values arguments.
-    """
+    """Mock embeddings and the SQL insert; returns a dict capturing execute_values args."""
     monkeypatch.setattr(
         ingest_mod, "embed_texts", lambda texts: [[float(i)] for i in range(len(texts))]
     )
@@ -112,8 +109,7 @@ def _patch_io(monkeypatch):
         captured["rows"] = rows
         captured["template"] = template
         cur.rowcount = len(rows)
-        # _store_records uses fetch=True + RETURNING to count inserted rows;
-        # mimic one RETURNING row per inserted row.
+        # mimic one RETURNING row per inserted row
         if fetch:
             return [(i,) for i in range(len(rows))]
         return None

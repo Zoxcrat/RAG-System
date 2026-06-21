@@ -1,6 +1,4 @@
-// Parses the LLM answer into text + citation segments. Citations look like
-// "[página 42]" (the exact format the backend prompt requests); each becomes a
-// clickable button in the UI that jumps the PDF viewer to that page.
+// Splits an answer into text and "[página N]" citation segments.
 export type AnswerSegment =
   | { type: 'text'; value: string }
   | { type: 'citation'; page: number; label: string };

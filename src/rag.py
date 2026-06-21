@@ -61,21 +61,16 @@ def build_prompt(query: str, chunks: list[dict]) -> tuple[str, str]:
 
 
 def _min_distance(chunks: list[dict]) -> Optional[float]:
-    """Smallest cosine distance among chunks that have one.
-
-    Hybrid retrieval can include keyword-only chunks (distance None); those are
-    skipped so the anti-hallucination gate stays grounded in semantic distance.
-    """
+    """Smallest cosine distance among chunks that have one (keyword-only chunks skipped)."""
     distances = [c["distance"] for c in chunks if c.get("distance") is not None]
     return min(distances) if distances else None
 
 
 def _pages_used(chunks: list[dict]) -> list[int]:
-    """Unique, sorted page numbers of the retrieved chunks that ground the answer.
+    """Unique, sorted page numbers offered as context (NULL pages skipped).
 
-    These are the pages offered as context (NULL pages from plain-text docs are
-    skipped). The exact pages the model cites are parsed from the answer text
-    (the [página N] tokens) by the caller / frontend.
+    The exact pages the model cites are parsed from the answer's [página N] tokens
+    by the caller/frontend.
     """
     return sorted(
         {chunk["page_number"] for chunk in chunks if chunk.get("page_number") is not None}
@@ -110,14 +105,11 @@ def generate_answer(query: str, chunks: list[dict]) -> str:
 
 
 def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
-    # Route aggregation questions (count / list all / most common) to the structured
-    # parts table via text-to-SQL — the semantic path below only sees top_k chunks
-    # and can't answer "how many" or "list all" over the whole catalog.
+    # Route aggregation questions to the parts table via text-to-SQL; the semantic
+    # path below only sees top_k chunks.
     if AGG_ENABLED and is_aggregation_query(query):
         agg = answer_aggregation(conn, query)
-        # Only use the structured answer if SQL actually returned rows; otherwise
-        # fall through to semantic retrieval (e.g. the materials/adhesives section,
-        # which isn't captured in the parts table).
+        # Fall through to semantic retrieval if SQL returned no rows.
         if agg["ok"]:
             return {
                 "query": query,
@@ -129,10 +121,8 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
                 "sql": agg.get("sql"),
             }
 
-    # Retrieve a wider candidate set, then rerank it down to top_k. The relevance
-    # gate runs on the candidates first, so an out-of-domain query is refused
-    # without spending a reranking call. Query expansion (multi-query) widens recall
-    # for questions worded differently from the catalog.
+    # Retrieve a wider candidate set, then rerank down to top_k. The relevance gate
+    # runs on candidates first, so an out-of-domain query is refused before reranking.
     if QUERY_EXPANSION_ENABLED:
         candidates = retrieve_multi(conn, query, top_k=RERANK_CANDIDATES)
     else:
@@ -170,7 +160,7 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
 
 
 if __name__ == "__main__":
-    # The first two match the sample docs; the third is off-topic on purpose.
+    # First two match the sample docs; the third is off-topic on purpose.
     queries = [
         "What is PGVector and what is it used for?",
         "How does retrieval-augmented generation work?",

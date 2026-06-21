@@ -4,8 +4,7 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { PDF_URL } from '../api';
 
-// PDF.js renders on a web worker; point it at the worker shipped with pdfjs-dist.
-// Vite turns this into a proper bundled worker URL.
+// Point PDF.js at the bundled worker.
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
   import.meta.url,

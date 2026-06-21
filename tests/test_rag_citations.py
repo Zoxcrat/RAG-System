@@ -1,7 +1,7 @@
 import src.rag as rag
 
 
-# --- build_prompt: pages are exposed and page citations are requested --------
+# --- build_prompt --------------------------------------------------------------
 
 def test_build_prompt_shows_page_and_asks_for_page_citation():
     chunks = [
@@ -13,9 +13,7 @@ def test_build_prompt_shows_page_and_asks_for_page_citation():
 
     system_prompt, user_prompt = rag.build_prompt("which bolt?", chunks)
 
-    # the model is told to cite in the exact [página N] format (frontend parses it)
     assert "[página N]" in system_prompt
-    # each chunk carries its page in the context
     assert 'page="42"' in user_prompt
     assert 'page="57"' in user_prompt
     assert "wing bolt P/N 0500" in user_prompt
@@ -23,22 +21,21 @@ def test_build_prompt_shows_page_and_asks_for_page_citation():
 
 
 def test_build_prompt_handles_chunk_without_page():
-    chunks = [{"content": "x", "source": "doc.txt"}]  # plain text, no page_number
+    chunks = [{"content": "x", "source": "doc.txt"}]  # no page_number
 
     _system, user_prompt = rag.build_prompt("q", chunks)
 
     assert 'page="n/a"' in user_prompt
 
 
-# --- ask: assembles sources with page_number and the unique pages used -------
+# --- ask: source assembly and unique pages -----------------------------------
 
 def _patch_pipeline(monkeypatch, chunks, answer="ok"):
-    # these tests cover the lookup path, so force the aggregation router off
+    # lookup path: force the aggregation router off
     monkeypatch.setattr(rag, "is_aggregation_query", lambda query: False)
     monkeypatch.setattr(rag, "retrieve_multi", lambda conn, query, top_k: chunks)
     monkeypatch.setattr(rag, "retrieve_hybrid", lambda conn, query, top_k: chunks)
-    # rerank is exercised in test_rerank; here use an identity passthrough so the
-    # ask() assertions stay focused on response assembly (no API call).
+    # identity rerank (covered in test_rerank)
     monkeypatch.setattr(rag, "rerank", lambda query, c, top_k: c[:top_k])
     monkeypatch.setattr(rag, "generate_answer", lambda query, c: answer)
 

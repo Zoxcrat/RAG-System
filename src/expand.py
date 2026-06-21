@@ -1,11 +1,4 @@
-"""Query expansion (multi-query / RAG-Fusion).
-
-If a question is worded differently from the catalog ("what holds the headliner up?"
-vs the catalog's "HANGER-HEADLINER"), a single query can miss. We ask the LLM for a
-few paraphrases, retrieve for each, and fuse the results (see retrieve.retrieve_multi).
-More angles on the same question = more robust recall, at the cost of a few extra
-retrievals.
-"""
+"""Query expansion (multi-query / RAG-Fusion): LLM paraphrases of the question."""
 from typing import Optional
 
 from openai import OpenAI
@@ -26,11 +19,7 @@ def _get_client() -> OpenAI:
 
 
 def expand_query(query: str, n: int = EXPANSION_N) -> list[str]:
-    """Return up to ``n`` query variants, always including the original first.
-
-    Fails open: any error returns just the original query, so expansion can only
-    help recall, never break a request.
-    """
+    """Return up to ``n`` query variants, original first; returns just the original on error."""
     if n <= 1:
         return [query]
     try:
@@ -51,7 +40,7 @@ def expand_query(query: str, n: int = EXPANSION_N) -> list[str]:
             ],
         )
         text = resp.choices[0].message.content or ""
-    except Exception:  # noqa: BLE001 - expansion is best-effort
+    except Exception:  # noqa: BLE001 - best-effort
         return [query]
 
     variants = [query]
