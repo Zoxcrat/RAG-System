@@ -6,9 +6,10 @@ from src import config
 from src.aggregate import answer_aggregation, is_aggregation_query
 from src.db import get_connection
 from src.rerank import rerank
-from src.retrieve import retrieve_hybrid
+from src.retrieve import retrieve_hybrid, retrieve_multi
 
 AGG_ENABLED = config.AGG_ENABLED
+QUERY_EXPANSION_ENABLED = config.QUERY_EXPANSION_ENABLED
 LLM_MODEL = config.LLM_MODEL
 DEFAULT_TOP_K = config.DEFAULT_TOP_K
 TEMPERATURE = config.TEMPERATURE
@@ -130,8 +131,12 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
 
     # Retrieve a wider candidate set, then rerank it down to top_k. The relevance
     # gate runs on the candidates first, so an out-of-domain query is refused
-    # without spending a reranking call.
-    candidates = retrieve_hybrid(conn, query, top_k=RERANK_CANDIDATES)
+    # without spending a reranking call. Query expansion (multi-query) widens recall
+    # for questions worded differently from the catalog.
+    if QUERY_EXPANSION_ENABLED:
+        candidates = retrieve_multi(conn, query, top_k=RERANK_CANDIDATES)
+    else:
+        candidates = retrieve_hybrid(conn, query, top_k=RERANK_CANDIDATES)
     min_dist = _min_distance(candidates)
     relevant = min_dist is not None and min_dist <= RELEVANCE_THRESHOLD
 

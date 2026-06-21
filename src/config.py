@@ -40,6 +40,14 @@ EMBEDDING_DIM = _get_int("EMBEDDING_DIM", 1536)
 # batches of this size. 1000 stays well under both limits for our ~500-char chunks.
 EMBED_BATCH_SIZE = _get_int("EMBED_BATCH_SIZE", 1000)
 
+# --- Query expansion (multi-query / RAG-Fusion) ---
+# Generate paraphrases of the question, retrieve for each, and fuse. Implemented and
+# kept toggleable, but OFF by default: on the eval gold set it *hurt* (recall@5
+# 0.91 -> 0.82) because those questions are already specific, so the extra paraphrases
+# add noise that dilutes the ranking. See docs/16-query-expansion-evaluado.md.
+QUERY_EXPANSION_ENABLED = os.getenv("QUERY_EXPANSION_ENABLED", "false").lower() in ("1", "true", "yes")
+QUERY_EXPANSION_N = _get_int("QUERY_EXPANSION_N", 3)  # total queries incl. the original
+
 # --- Retrieval (hybrid search) ---
 # Each arm (vector + keyword) pulls this many candidates before fusing. Larger
 # than top_k so a chunk ranked outside the final top_k by one arm can still be

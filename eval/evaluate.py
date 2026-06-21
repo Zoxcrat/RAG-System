@@ -17,10 +17,10 @@ from src import config
 from src.db import get_connection
 from src.rag import ask
 from src.rerank import rerank
-from src.retrieve import retrieve, retrieve_hybrid
+from src.retrieve import retrieve, retrieve_hybrid, retrieve_multi
 
 K_VALUES = (5, 10)
-ARMS = ("vector", "hybrid", "hybrid+rerank")
+ARMS = ("vector", "hybrid", "hybrid+rerank", "expand+rerank")
 GOLD = json.load(open("eval/gold_set.json", encoding="utf-8"))["items"]
 IN_DOMAIN = [i for i in GOLD if i["type"] == "in_domain"]
 
@@ -59,6 +59,8 @@ def main() -> None:
             fused = retrieve_hybrid(conn, q, top_k=config.RERANK_CANDIDATES)
             top10["hybrid"][q] = fused[:10]
             top10["hybrid+rerank"][q] = rerank(q, fused, top_k=10)
+            expanded = retrieve_multi(conn, q, top_k=config.RERANK_CANDIDATES)
+            top10["expand+rerank"][q] = rerank(q, expanded, top_k=10)
 
         scores = {arm: _score_arm(top10[arm]) for arm in ARMS}
 

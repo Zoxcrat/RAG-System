@@ -35,6 +35,7 @@ def test_build_prompt_handles_chunk_without_page():
 def _patch_pipeline(monkeypatch, chunks, answer="ok"):
     # these tests cover the lookup path, so force the aggregation router off
     monkeypatch.setattr(rag, "is_aggregation_query", lambda query: False)
+    monkeypatch.setattr(rag, "retrieve_multi", lambda conn, query, top_k: chunks)
     monkeypatch.setattr(rag, "retrieve_hybrid", lambda conn, query, top_k: chunks)
     # rerank is exercised in test_rerank; here use an identity passthrough so the
     # ask() assertions stay focused on response assembly (no API call).
