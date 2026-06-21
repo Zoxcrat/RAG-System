@@ -14,10 +14,6 @@ data/*.pdf
 # reproducible, so it is kept out of git like the source PDF.
 data/*ocr*.json
 
-# Personal project notes / Claude guidance — kept local, not versioned.
+# Local notes — kept out of the repo.
 CLAUDE.md
-
-
-# Personal interview prep — kept local, not shared in the repo
-docs/12-preguntas-entrevista.md
-docs/COMO-TRABAJO-Y-LA-IA.md
+docs/
