@@ -17,3 +17,4 @@ data/*ocr*.json
 # Local notes — kept out of the repo.
 CLAUDE.md
 docs/
+PLAN.md
