@@ -56,6 +56,10 @@ RRF_K = _get_int("RRF_K", 60)
 AGG_ENABLED = os.getenv("AGG_ENABLED", "true").lower() in ("1", "true", "yes")
 # Cap rows fed to the model when formatting the answer (keeps the prompt bounded).
 AGG_ROW_LIMIT = _get_int("AGG_ROW_LIMIT", 200)
+# Self-consistency: sample this many SQL candidates and use the result the majority
+# agree on (1 = single deterministic query, no voting). Sampling needs temperature > 0.
+AGG_SELF_CONSISTENCY = _get_int("AGG_SELF_CONSISTENCY", 3)
+AGG_SAMPLE_TEMPERATURE = _get_float("AGG_SAMPLE_TEMPERATURE", 0.4)
 
 # --- Reranking ---
 # After hybrid retrieval, an LLM reranker reorders the candidates by relevance

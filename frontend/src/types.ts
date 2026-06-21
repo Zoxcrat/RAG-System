@@ -13,4 +13,7 @@ export interface AskResponse {
   sources: Source[];
   pages: number[];
   min_distance: number | null;
+  // "lookup" (semantic) or "aggregate" (structured); sql is shown for transparency.
+  mode?: string;
+  sql?: string | null;
 }

@@ -1,5 +1,5 @@
-"""Tests for the text-to-SQL guardrails (pure, no DB or API)."""
-from src.aggregate import _with_limit, is_safe_select
+"""Tests for the text-to-SQL guardrails and self-consistency (pure, no DB or API)."""
+from src.aggregate import _result_signature, _with_limit, is_safe_select
 
 
 def test_accepts_read_only_select_on_parts():
@@ -27,3 +27,12 @@ def test_rejects_queries_against_other_tables():
 def test_with_limit_adds_only_when_absent():
     assert _with_limit("SELECT * FROM parts", 50).endswith("LIMIT 50")
     assert _with_limit("SELECT * FROM parts LIMIT 5", 50).endswith("LIMIT 5")
+
+
+def test_result_signature_is_order_independent():
+    cols = ["type", "n"]
+    a = _result_signature(cols, [("screw", 98), ("rivet", 14)])
+    b = _result_signature(cols, [("rivet", 14), ("screw", 98)])  # same rows, different order
+    c = _result_signature(cols, [("screw", 99), ("rivet", 14)])  # different count
+    assert a == b   # voting treats these as the same result
+    assert a != c

@@ -52,6 +52,9 @@ class AskResponse(BaseModel):
     sources: list[Source]
     pages: list[int]
     min_distance: Optional[float] = None
+    # "lookup" (semantic) or "aggregate" (structured); sql is the query run when aggregate.
+    mode: str = "lookup"
+    sql: Optional[str] = None
 
 
 def get_db():

@@ -9,15 +9,22 @@ interface Props {
   currentPage: number;
 }
 
+const EXAMPLE_QUERIES = [
+  'What is the part number for the headliner hanger?',
+  'Where is the dorsal assembly listed?',
+  'What is part number 0411680?',
+];
+
 export function AskPanel({ onGoToPage, currentPage }: Props) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function submitQuery() {
-    const q = query.trim();
+  async function submitQuery(override?: string) {
+    const q = (override ?? query).trim();
     if (!q || loading) return;
+    if (override !== undefined) setQuery(override);
 
     setLoading(true);
     setError(null);
@@ -66,10 +73,31 @@ export function AskPanel({ onGoToPage, currentPage }: Props) {
         </div>
       </form>
 
-      {loading && <div className="loading">Searching the catalog…</div>}
+      {loading && (
+        <div className="loading">
+          <span className="spinner" aria-hidden="true" />
+          Searching the catalog…
+        </div>
+      )}
       {error && <div className="error">{error}</div>}
       {!result && !error && !loading && (
-        <p className="hint">Ask a question about the catalog to get started.</p>
+        <div className="empty-state">
+          <div className="empty-icon" aria-hidden="true">🔍</div>
+          <p className="hint">Ask a question about the catalog, or try one:</p>
+          <div className="examples">
+            <span className="examples-label">Examples</span>
+            {EXAMPLE_QUERIES.map((q) => (
+              <button
+                key={q}
+                type="button"
+                className="example-chip"
+                onClick={() => void submitQuery(q)}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {result && (
@@ -77,8 +105,28 @@ export function AskPanel({ onGoToPage, currentPage }: Props) {
           <h3>Answer</h3>
           <AnswerText answer={result.answer} onCite={onGoToPage} activePage={currentPage} />
 
+          {result.sql && (
+            <details className="agg-sql">
+              <summary>Answered from the parts table · show SQL</summary>
+              <pre>{result.sql}</pre>
+            </details>
+          )}
+
           {result.pages.length > 0 && (
-            <p className="pages">Pages: {result.pages.join(', ')}</p>
+            <div className="pages">
+              <span className="pages-label">Pages</span>
+              {result.pages.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className={p === currentPage ? 'page-chip active' : 'page-chip'}
+                  onClick={() => onGoToPage(p)}
+                  title={`Go to page ${p}`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           )}
 
           {result.sources.length > 0 && (
@@ -87,8 +135,11 @@ export function AskPanel({ onGoToPage, currentPage }: Props) {
               <ul>
                 {result.sources.map((s) => (
                   <li key={s.id}>
-                    {s.source ?? 'unknown'} — page {s.page_number ?? 'n/a'}
-                    {s.distance != null && ` · distance ${s.distance.toFixed(3)}`}
+                    <span className="source-page">p. {s.page_number ?? 'n/a'}</span>
+                    <span className="source-name">{s.source ?? 'unknown'}</span>
+                    {s.distance != null && (
+                      <span className="source-dist">{s.distance.toFixed(3)}</span>
+                    )}
                   </li>
                 ))}
               </ul>

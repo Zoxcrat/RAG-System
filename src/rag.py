@@ -124,6 +124,8 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
                 "sources": [],
                 "pages": agg["pages"],
                 "min_distance": None,
+                "mode": "aggregate",
+                "sql": agg.get("sql"),
             }
 
     # Retrieve a wider candidate set, then rerank it down to top_k. The relevance
@@ -157,6 +159,8 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
         "sources": sources,
         "pages": _pages_used(chunks),
         "min_distance": _min_distance(chunks),
+        "mode": "lookup",
+        "sql": None,
     }
 
 
