@@ -12,7 +12,7 @@ if [ -z "$OPENAI_API_KEY" ] || [ "$OPENAI_API_KEY" = "your_key_here" ]; then
   echo "[entrypoint] Put a real key in .env to embed data/sample_docs.txt."
 else
   echo "[entrypoint] Ingesting sample docs (idempotent)..."
-  python -m src.ingest || echo "[entrypoint] Ingestion failed; continuing."
+  python -m src.ingestion.ingest || echo "[entrypoint] Ingestion failed; continuing."
 fi
 
 # Run whatever command was passed (defaults to the interactive CLI).

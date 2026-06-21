@@ -9,9 +9,9 @@ import json
 
 from src import config
 from src.db import get_connection
-from src.rag import ask
-from src.rerank import rerank
-from src.retrieve import retrieve, retrieve_hybrid, retrieve_multi
+from src.answer.rag import ask
+from src.retrieval.rerank import rerank
+from src.retrieval.retrieve import retrieve, retrieve_hybrid, retrieve_multi
 
 K_VALUES = (5, 10)
 ARMS = ("vector", "hybrid", "hybrid+rerank", "expand+rerank")

@@ -108,7 +108,7 @@ def load_extracted_text(input_path: str) -> list[ExtractedPage]:
 
 
 if __name__ == "__main__":
-    # Usage: python -m src.pdf_loader [path/to/file.pdf]
+    # Usage: python -m src.ingestion.pdf_loader [path/to/file.pdf]
     pdf_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PDF_PATH
     preview_chars = 300
 

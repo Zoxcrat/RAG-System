@@ -1,6 +1,6 @@
 """Tests for hybrid retrieval: the pure RRF fusion and the keyword SQL arm."""
-import src.retrieve as retrieve_mod
-from src.retrieve import reciprocal_rank_fusion
+import src.retrieval.retrieve as retrieve_mod
+from src.retrieval.retrieve import reciprocal_rank_fusion
 
 
 def _chunk(cid, distance=None):

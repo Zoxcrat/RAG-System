@@ -1,4 +1,4 @@
-import src.rag as rag
+import src.answer.rag as rag
 
 
 # --- build_prompt --------------------------------------------------------------

@@ -80,7 +80,7 @@ if __name__ == "__main__":
     import sys
 
     from src.db import get_connection, init_schema
-    from src.pdf_loader import load_extracted_text
+    from src.ingestion.pdf_loader import load_extracted_text
 
     json_path = sys.argv[1] if len(sys.argv) > 1 else "data/cessna_172_ocr.json"
     conn = get_connection()

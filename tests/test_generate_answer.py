@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import src.rag as rag
+import src.answer.rag as rag
 
 
 def _fake_response(content):

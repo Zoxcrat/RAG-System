@@ -1,5 +1,5 @@
 """Tests for structured parts extraction (pure, no DB)."""
-from src.parts import extract_parts
+from src.ingestion.parts import extract_parts
 
 
 def test_extracts_part_number_description_and_page():

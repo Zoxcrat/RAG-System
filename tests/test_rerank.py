@@ -1,6 +1,6 @@
 """Tests for the LLM reranker: the pure ranking parser and the reorder/fail-open."""
-import src.rerank as rerank_mod
-from src.rerank import _parse_ranking, rerank
+import src.retrieval.rerank as rerank_mod
+from src.retrieval.rerank import _parse_ranking, rerank
 
 
 # --- parsing the model's ranking into a full permutation ---------------------

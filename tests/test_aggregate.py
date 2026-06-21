@@ -1,5 +1,5 @@
 """Tests for the text-to-SQL guardrails and self-consistency (pure, no DB or API)."""
-from src.aggregate import _result_signature, _with_limit, is_safe_select
+from src.answer.aggregate import _result_signature, _with_limit, is_safe_select
 
 
 def test_accepts_read_only_select_on_parts():

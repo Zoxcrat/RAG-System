@@ -126,7 +126,7 @@ def retrieve_multi(
     """Multi-query (RAG-Fusion): expand into a few phrasings, retrieve hybrid for
     each, and fuse with RRF. Falls back to ``retrieve_hybrid`` for a single query.
     """
-    from src.expand import expand_query
+    from src.retrieval.expand import expand_query
 
     queries = expand_query(query)
     if len(queries) <= 1:

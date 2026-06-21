@@ -57,7 +57,7 @@ init: up
 	$(PY) -m src.db
 
 ingest: up
-	$(PY) -m src.ingest
+	$(PY) -m src.ingestion.ingest
 
 ask: up
 	$(PY) -m src.main
@@ -69,7 +69,7 @@ eval: up
 	$(PY) -m eval.evaluate
 
 compile:
-	$(PY) -c "import src.db, src.embed, src.ingest, src.retrieve, src.rag, src.main; print('all modules import OK')"
+	$(PY) -c "import src.db, src.embed, src.ingestion.ingest, src.retrieval.retrieve, src.answer.rag, src.main; print('all modules import OK')"
 
 clean:
 	docker compose down -v
@@ -82,11 +82,11 @@ docker-build:
 docker-up: docker-build
 	docker compose up -d postgres
 	@until docker compose exec -T postgres pg_isready -U rag_user -d rag_db >/dev/null 2>&1; do sleep 1; done
-	docker compose run --rm app python -m src.ingest
+	docker compose run --rm app python -m src.ingestion.ingest
 	@echo "Stack ready. Run 'make docker-ask' to query it."
 
 docker-ingest:
-	docker compose run --rm app python -m src.ingest
+	docker compose run --rm app python -m src.ingestion.ingest
 
 docker-ask:
 	docker compose run --rm app python -m src.main
@@ -98,10 +98,10 @@ docker-down:
 
 # Override PDF to point at another file, e.g. `make docker-ocr PDF=data/other.pdf`.
 ocr:
-	$(PY) -m src.pdf_loader "$(PDF)"
+	$(PY) -m src.ingestion.pdf_loader "$(PDF)"
 
 docker-ocr: docker-build
-	docker compose run --rm --no-deps --entrypoint python app -m src.pdf_loader "$(PDF)"
+	docker compose run --rm --no-deps --entrypoint python app -m src.ingestion.pdf_loader "$(PDF)"
 
 # --- API (FastAPI backend) ---
 

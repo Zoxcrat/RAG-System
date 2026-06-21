@@ -1,6 +1,6 @@
 from src.db import get_connection, init_schema
-from src.ingest import ingest_file
-from src.rag import ask
+from src.ingestion.ingest import ingest_file
+from src.answer.rag import ask
 
 SAMPLE_DOCS_PATH = "data/sample_docs.txt"
 

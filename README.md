@@ -150,22 +150,17 @@ question through.
 
 ```
 src/
-  config.py     configuration (the only module that reads the environment)
-  db.py         connection + schema (HNSW + GIN indexes, parts table)
-  embed.py      text -> embedding vectors (batched)
-  pdf_loader.py PDF -> per-page OCR text, cached to JSON
-  parts.py      structured parts parsed from the OCR (for aggregation)
-  ingest.py     chunk per page -> embed -> store
-  retrieve.py   vector + full-text arms and RRF fusion
-  rerank.py     LLM reranker over the candidates
-  expand.py     query expansion (off by default, see config)
-  aggregate.py  intent router + text-to-SQL over the parts table
-  rag.py        prompt, relevance gate, answer generation
-  api.py        FastAPI: /health, /ask, /pdf
-  main.py       CLI
-frontend/       React + Vite + TypeScript: PDF viewer and Q&A panel
-eval/           retrieval evaluation (gold set + recall@k / MRR)
-tests/          unit tests, mocked (no DB or API)
+  config.py        configuration (the only module that reads the environment)
+  db.py            connection + schema (HNSW + GIN indexes, parts table)
+  embed.py         text -> embedding vectors (batched)
+  api.py           FastAPI: /health, /ask, /pdf
+  main.py          CLI
+  ingestion/       pdf_loader (OCR), ingest (chunk per page), parts (structured parts)
+  retrieval/       retrieve (hybrid + RRF), rerank, expand (off by default)
+  answer/          rag (prompt, gate, generation), aggregate (router + text-to-SQL)
+frontend/          React + Vite + TypeScript: PDF viewer and Q&A panel
+eval/              retrieval evaluation (gold set + recall@k / MRR)
+tests/             unit tests, mocked (no DB or API)
 ```
 
 ## Tests and evaluation

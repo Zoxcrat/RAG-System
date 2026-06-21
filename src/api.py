@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from src import config
 from src.db import get_connection
-from src.rag import ask
+from src.answer.rag import ask
 
 app = FastAPI(title="Aviation Parts RAG API", version="0.1.0")
 

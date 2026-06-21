@@ -1,6 +1,6 @@
 """Tests for query expansion (mocked LLM, no network)."""
-import src.expand as expand_mod
-from src.expand import expand_query
+import src.retrieval.expand as expand_mod
+from src.retrieval.expand import expand_query
 
 
 class _Resp:

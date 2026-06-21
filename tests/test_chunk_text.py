@@ -1,4 +1,4 @@
-from src.ingest import CHUNK_OVERLAP, CHUNK_SIZE, chunk_text
+from src.ingestion.ingest import CHUNK_OVERLAP, CHUNK_SIZE, chunk_text
 
 
 def test_empty_or_whitespace_text_returns_empty_list():

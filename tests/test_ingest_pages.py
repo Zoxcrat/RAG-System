@@ -1,5 +1,5 @@
-import src.ingest as ingest_mod
-from src.ingest import _content_hash, _records_from_pages, _records_from_text
+import src.ingestion.ingest as ingest_mod
+from src.ingestion.ingest import _content_hash, _records_from_pages, _records_from_text
 
 
 # --- building chunk records from pages --------------------------------------

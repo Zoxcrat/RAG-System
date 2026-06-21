@@ -3,10 +3,10 @@ from typing import Optional
 from openai import OpenAI
 
 from src import config
-from src.aggregate import answer_aggregation, is_aggregation_query
+from src.answer.aggregate import answer_aggregation, is_aggregation_query
 from src.db import get_connection
-from src.rerank import rerank
-from src.retrieve import retrieve_hybrid, retrieve_multi
+from src.retrieval.rerank import rerank
+from src.retrieval.retrieve import retrieve_hybrid, retrieve_multi
 
 AGG_ENABLED = config.AGG_ENABLED
 QUERY_EXPANSION_ENABLED = config.QUERY_EXPANSION_ENABLED

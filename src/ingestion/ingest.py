@@ -132,8 +132,8 @@ if __name__ == "__main__":
     try:
         init_schema(conn)
         if len(sys.argv) > 1:
-            # Usage: python -m src.ingest <pages.json> [source_name]
-            from src.pdf_loader import load_extracted_text
+            # Usage: python -m src.ingestion.ingest <pages.json> [source_name]
+            from src.ingestion.pdf_loader import load_extracted_text
 
             json_path = sys.argv[1]
             source = sys.argv[2] if len(sys.argv) > 2 else os.path.basename(json_path)
@@ -144,7 +144,7 @@ if __name__ == "__main__":
                 f"({len(pages)} pages, source={source!r})"
             )
             # Rebuild the structured parts table for aggregation queries.
-            from src.parts import ingest_parts
+            from src.ingestion.parts import ingest_parts
 
             n_parts = ingest_parts(conn, pages)
             print(f"Extracted {n_parts} parts into the parts table")

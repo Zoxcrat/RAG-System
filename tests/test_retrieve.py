@@ -1,4 +1,4 @@
-import src.retrieve as retrieve_mod
+import src.retrieval.retrieve as retrieve_mod
 
 
 class FakeCursor:
