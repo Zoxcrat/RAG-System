@@ -36,8 +36,9 @@ there is no relevant information.
 
 **Out of scope (roadmap, not implemented):** a dedicated cross-encoder / rerank-API
 reranker (current reranker reuses the chat LLM), structure-aware chunking (rows/sections),
-query expansion, metadata filtering, faithfulness evaluation, diagram/vision understanding,
-streaming.
+metadata filtering, faithfulness evaluation, streaming. Query expansion is implemented but
+**off by default** (it hurt recall on the eval set); diagram/vision understanding exists only
+as a proof of concept.
 
 **Locked-in technical constraints:** Python 3.12, PostgreSQL 16 with PGVector and Tesseract
 (in Docker), OpenAI API for embeddings and generation, FastAPI/uvicorn, `psycopg2`,
@@ -47,35 +48,42 @@ streaming.
 
 ## 2. Architecture
 
-Modules in `src/`, each with a single responsibility. Dependencies flow in a single
-direction (no cycles):
+The code is grouped into three pipeline packages plus shared modules and entrypoints.
+Dependencies flow in one direction (no cycles):
 
 ```
-api  ──► rag ──► retrieve ──► embed ──► (OpenAI API)
- │        │  └──► rerank ─────────────► (OpenAI API)
-main ─────┤         │
- │        │         └────────► db ──► (PostgreSQL + PGVector)
- └──► ingest ──► embed, db
-        ▲
-pdf_loader (PDF → OCR JSON) ──feeds──┘
+src/
+  config, db, embed     shared
+  api, main             entrypoints
+  ingestion/  pdf_loader, ingest, parts
+  retrieval/  retrieve, rerank, expand
+  answer/     rag, aggregate
 
-db, embed, ingest, retrieve, rerank, rag, api ──► config ──► (environment / .env)
+api ──► answer/rag ──┬─► retrieval/retrieve ──► retrieval/expand, embed ──► (OpenAI)
+ │                   ├─► retrieval/rerank ───────────────────────────────► (OpenAI)
+ │                   └─► answer/aggregate ──► text-to-SQL over parts ─────► (OpenAI)
+main ──► ingestion/ingest ──► ingestion/parts, embed, db
+ │       ingestion/pdf_loader (PDF → OCR JSON) ──feeds──┘
+ └──► db ──► (PostgreSQL + PGVector)
+
+every module ──► config ──► (environment / .env)
 ```
 
-| Module | Responsibility |
+| Package / module | Responsibility |
 |---|---|
-| `config` | Single source of truth for environment configuration. The only module that reads `os.getenv`. |
-| `db` | PostgreSQL connection and schema (`vector` extension, `documents` table, HNSW + GIN indexes, content-hash unique index). Does not know about embeddings or the LLM. |
-| `pdf_loader` | Scanned PDF → per-page OCR text (PyMuPDF render + Tesseract), with a JSON cache. Independent of the DB. |
-| `embed` | Convert text into vectors via OpenAI, batched (≤2048 inputs/request). The only point that calls the embeddings endpoint. |
-| `ingest` | Offline pipeline: text/OCR pages → chunking (per page) → batch embeddings → idempotent INSERT into `documents`. |
-| `retrieve` | Hybrid search: vector (cosine k-NN) + lexical (full-text) arms, fused with Reciprocal Rank Fusion. Returns chunks with metadata, page and distance. |
-| `parts` | Parses the OCR into a structured `parts` table (part_number, description, page, figure) for aggregation. |
-| `aggregate` | Intent router + guarded text-to-SQL over `parts` (count/list/group), with semantic fallback. |
-| `rerank` | Listwise LLM reranker over the hybrid candidates. Pure ranking parser + fail-open call. |
-| `rag` | Orchestrates the query phase: hybrid retrieve → gate → rerank → grounded prompt → LLM → response (answer + `[página N]` + pages). |
-| `api` | FastAPI app exposing `/health`, `/ask`, `/pdf` over HTTP (CORS for local dev). |
-| `main` | Interactive CLI: initializes the schema, offers re-ingestion, question/answer loop. Presentation layer. |
+| `config` | Single source of truth for configuration; the only module that reads `os.getenv`. |
+| `db` | Postgres connection and schema (`vector` extension, `documents` + `parts` tables, HNSW + GIN indexes, content-hash unique index). |
+| `embed` | Text → vectors via OpenAI, batched (≤2048 inputs/request). |
+| **ingestion/** `pdf_loader` | Scanned PDF → per-page OCR text (PyMuPDF + Tesseract), JSON cache. |
+| **ingestion/** `ingest` | OCR pages → chunk per page → batch embeddings → idempotent INSERT into `documents`. |
+| **ingestion/** `parts` | Parses the OCR into the structured `parts` table for aggregation. |
+| **retrieval/** `retrieve` | Hybrid search: vector + full-text arms fused with RRF (with optional multi-query). |
+| **retrieval/** `rerank` | Listwise LLM reranker over the candidates (fail-open). |
+| **retrieval/** `expand` | Query expansion (multi-query); off by default. |
+| **answer/** `rag` | Query orchestration: route → retrieve → gate → rerank → grounded prompt → LLM → response. |
+| **answer/** `aggregate` | Intent router + guarded text-to-SQL over `parts`, with semantic fallback. |
+| `api` | FastAPI: `/health`, `/ask`, `/pdf` (CORS for dev). |
+| `main` | Interactive CLI. |
 
 **Data model** (`documents`):
 
