@@ -80,6 +80,36 @@ pregunta → ¿agregación? ─sí→ text-to-SQL sobre parts → ¿filas? ─s�
 - La **sección de materiales** (columnas) no entra a `parts`; la cubre el fallback semántico.
   Lo ideal a futuro: OCR con **layout** (que entienda columnas) o parseo de tablas.
 
+## Confiabilidad: auto-consistencia + SQL visible (mejora #1)
+
+El text-to-SQL tenía un punto flojo: la IA a veces escribía la consulta distinta o
+interpretaba mal la pregunta (ej. "fastener más común" → buscaba la palabra "FASTENER" en
+vez de comparar tipos). Dos mejoras lo resuelven:
+
+**Funcional (qué cambia para el usuario):**
+- Cada respuesta de agregación ahora **muestra la consulta SQL** que se ejecutó (un bloque
+  desplegable "show SQL"). El evaluador ve **exactamente qué se contó** → de "el número baila"
+  a **"auditable"**.
+- Las respuestas son **más estables**: el sistema prueba la consulta varias veces y se queda
+  con el resultado en el que **coincide la mayoría**.
+
+**Técnico (lo importante de saber):**
+- **Auto-consistencia (self-consistency):** se generan **3** consultas SQL **con algo de
+  variación** (temperatura > 0), se corren todas, y se **vota**: gana el resultado que más se
+  repite. Una consulta malita ocasional queda en minoría y se descarta. *Teoría: muestrear
+  varios caminos de razonamiento y quedarse con el consenso — más robusto que una sola tirada.*
+- **Few-shot para "el más común":** se le da a la IA un **ejemplo** de cómo comparar *tipos*
+  (screw/rivet/bolt/...) con `GROUP BY ... ORDER BY COUNT DESC`, para que no lo tome literal.
+- **SQL en la respuesta:** `ask` devuelve `mode` ("aggregate"/"lookup") y `sql`; la API los
+  expone y el frontend los muestra. Transparencia = confianza.
+- *Honesto:* "nut" puede ganar como "más común" porque `ILIKE '%nut%'` también matchea
+  "NUTPLATE" — pero **al estar la SQL a la vista, es explicable y defendible**.
+
+**Resultado (por HTTP):**
+- *"¿Cuántas costillas distintas en el ala?"* → "74" con SQL `COUNT(DISTINCT part_number)
+  WHERE description ILIKE '%RIB%' AND figure ILIKE '%wing%'`.
+- *"¿Se usan más screws que rivets?"* → "Sí, screws 98 vs rivets 14" + la SQL.
+
 ## Dónde está
 - `src/parts.py` — extracción + tabla `parts` (`ingest_parts`).
 - `src/aggregate.py` — router, text-to-SQL, candados, ejecución read-only, redacción, fallback.
