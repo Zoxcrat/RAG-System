@@ -14,8 +14,17 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Aviation Parts RAG</h1>
-        <p>Ask questions about the Cessna 172 parts catalog.</p>
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">✈</span>
+          <div>
+            <h1>Aviation Parts RAG</h1>
+            <p>Cessna 172 parts catalog · ask &amp; jump to the exact page</p>
+          </div>
+        </div>
+        <span className="brand-badge">
+          <span className="dot" aria-hidden="true" />
+          Hybrid search + reranking
+        </span>
       </header>
 
       <main className="app-main">
