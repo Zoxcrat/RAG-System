@@ -35,6 +35,7 @@ services:
   api:
     build: .
     image: rag-app:latest
+    restart: unless-stopped
     env_file: .env
     environment:
       DB_HOST: postgres
