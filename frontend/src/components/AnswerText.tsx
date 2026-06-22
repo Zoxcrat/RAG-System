@@ -7,7 +7,7 @@ interface Props {
   activePage?: number;
 }
 
-// Renders answer text with "[página N]" tokens as page-jump buttons.
+// Renders answer text with "[page N]" tokens as page-jump buttons.
 export function AnswerText({ answer, onCite, activePage }: Props) {
   const segments = parseAnswer(answer);
 

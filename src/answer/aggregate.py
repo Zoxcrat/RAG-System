@@ -124,8 +124,10 @@ def _format_answer(query: str, columns: list[str], rows: list[tuple]) -> str:
         table = "(no rows)"
     return _chat(
         "Answer the question using ONLY these SQL results from an aircraft parts catalog. "
-        "Be concise and concrete. Cite the relevant page(s) in the EXACT format [página N] "
-        "using the page_number column. If the results are empty or don't support an answer, "
+        "Be concise and concrete. Cite the most relevant page(s) using the page_number "
+        "column in the EXACT format [page N], each page in its own brackets, e.g. "
+        "[page 12] [page 15] (never [page 12, 15]). Cite only the few pages that support "
+        "the answer, not every page. If the results are empty or don't support an answer, "
         "say you don't have enough information. Never invent data not in the rows.",
         f"Question: {query}\nColumns: {', '.join(columns)}\nRows:\n{table}",
     )

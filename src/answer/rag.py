@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 from openai import OpenAI
@@ -38,9 +39,9 @@ def build_prompt(query: str, chunks: list[dict]) -> tuple[str, str]:
         "1. Use only information found in the context. Do not rely on prior knowledge.\n"
         "2. If the context does not contain enough information to answer, say so "
         "explicitly and state that you don't have enough information.\n"
-        "3. Cite the page(s) you use with bracketed page numbers in the exact "
-        "format [página N], where N is the page shown for the chunk you used "
-        "(for example [página 42]). If several chunks share a page, cite it once.\n"
+        "3. Cite the page(s) you use in the exact format [page N], where N is the "
+        "page shown for the chunk you used. Put each page in its own brackets, e.g. "
+        "[page 12] [page 15] (never [page 12, 15]).\n"
         "4. Never invent facts, pages, or citations."
     )
 
@@ -69,12 +70,23 @@ def _min_distance(chunks: list[dict]) -> Optional[float]:
 def _pages_used(chunks: list[dict]) -> list[int]:
     """Unique, sorted page numbers offered as context (NULL pages skipped).
 
-    The exact pages the model cites are parsed from the answer's [página N] tokens
+    The exact pages the model cites are parsed from the answer's [page N] tokens
     by the caller/frontend.
     """
     return sorted(
         {chunk["page_number"] for chunk in chunks if chunk.get("page_number") is not None}
     )
+
+
+_PAGE_CITATION_RE = re.compile(r"\[(?:p[aá]gina|page)s?\s+([\d,\s]+)\]", re.IGNORECASE)
+
+
+def _cited_pages(answer: str) -> list[int]:
+    """Page numbers the answer actually cites (handles [page 5] and [page 5, 7])."""
+    pages: set[int] = set()
+    for group in _PAGE_CITATION_RE.findall(answer):
+        pages.update(int(n) for n in re.findall(r"\d+", group))
+    return sorted(pages)
 
 
 def generate_answer(query: str, chunks: list[dict]) -> str:
@@ -115,7 +127,7 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
                 "query": query,
                 "answer": agg["answer"],
                 "sources": [],
-                "pages": agg["pages"],
+                "pages": _cited_pages(agg["answer"]) or agg["pages"],
                 "min_distance": None,
                 "mode": "aggregate",
                 "sql": agg.get("sql"),
@@ -152,7 +164,7 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
         "query": query,
         "answer": answer,
         "sources": sources,
-        "pages": _pages_used(chunks),
+        "pages": _cited_pages(answer) or _pages_used(chunks),
         "min_distance": _min_distance(chunks),
         "mode": "lookup",
         "sql": None,

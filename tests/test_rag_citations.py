@@ -13,7 +13,7 @@ def test_build_prompt_shows_page_and_asks_for_page_citation():
 
     system_prompt, user_prompt = rag.build_prompt("which bolt?", chunks)
 
-    assert "[página N]" in system_prompt
+    assert "[page N]" in system_prompt
     assert 'page="42"' in user_prompt
     assert 'page="57"' in user_prompt
     assert "wing bolt P/N 0500" in user_prompt
@@ -49,12 +49,12 @@ def test_ask_returns_sources_with_page_and_unique_sorted_pages(monkeypatch):
         {"id": 12, "content": "c", "source": "cat.pdf", "chunk_index": 2,
          "page_number": 42, "distance": 0.3},  # same page as above -> deduped
     ]
-    _patch_pipeline(monkeypatch, chunks, answer="Use the bolt [página 42]")
+    _patch_pipeline(monkeypatch, chunks, answer="Use the bolt [page 42] and rivet [page 57]")
 
     out = rag.ask(object(), "q")
 
-    assert out["answer"] == "Use the bolt [página 42]"
-    assert out["pages"] == [42, 57]                       # unique + sorted
+    assert out["answer"] == "Use the bolt [page 42] and rivet [page 57]"
+    assert out["pages"] == [42, 57]                       # cited pages, unique + sorted
     assert [s["page_number"] for s in out["sources"]] == [57, 42, 42]
     assert all("page_number" in s for s in out["sources"])
     assert out["min_distance"] == 0.1

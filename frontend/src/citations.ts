@@ -1,9 +1,9 @@
-// Splits an answer into text and "[página N]" citation segments.
+// Splits an answer into text and "[page N]" citation segments.
 export type AnswerSegment =
   | { type: 'text'; value: string }
   | { type: 'citation'; page: number; label: string };
 
-const CITATION_RE = /\[página\s+(\d+)\]/g;
+const CITATION_RE = /\[(?:page|página)\s+(\d+)\]/gi;
 
 export function parseAnswer(answer: string): AnswerSegment[] {
   const segments: AnswerSegment[] = [];
