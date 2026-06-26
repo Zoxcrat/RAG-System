@@ -22,6 +22,10 @@ DB_PORT = _get_int("DB_PORT", 5432)
 DB_NAME = os.getenv("DB_NAME", "rag_db")
 DB_USER = os.getenv("DB_USER", "rag_user")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "rag_password")
+# Connection pool for the API (one connection per request would storm Postgres
+# under load). Scripts/CLI still open a single direct connection.
+DB_POOL_MIN = _get_int("DB_POOL_MIN", 1)
+DB_POOL_MAX = _get_int("DB_POOL_MAX", 10)
 
 # --- OpenAI client ---
 OPENAI_MAX_RETRIES = _get_int("OPENAI_MAX_RETRIES", 3)

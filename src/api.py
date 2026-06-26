@@ -1,5 +1,6 @@
 """FastAPI HTTP layer for the RAG pipeline: /health, /ask, /pdf."""
 import os
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -8,10 +9,17 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from src import config
-from src.db import get_connection
+from src.db import close_pool, get_pool
 from src.answer.rag import ask
 
-app = FastAPI(title="Aviation Parts RAG API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    close_pool()  # release pooled connections on graceful shutdown
+
+
+app = FastAPI(title="Aviation Parts RAG API", version="0.1.0", lifespan=lifespan)
 
 # In dev the React app runs on a different port, so allow cross-origin explicitly.
 app.add_middleware(
@@ -47,12 +55,14 @@ class AskResponse(BaseModel):
 
 
 def get_db():
-    """Open a Postgres connection per request and always close it."""
-    conn = get_connection()
+    """Borrow a pooled connection for the request and return it clean."""
+    pool = get_pool()
+    conn = pool.getconn()
     try:
         yield conn
     finally:
-        conn.close()
+        conn.rollback()  # never hand a transaction back to the pool
+        pool.putconn(conn)
 
 
 @app.get("/health")

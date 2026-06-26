@@ -1,18 +1,52 @@
+from typing import Optional
+
 import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
 
 from src import config
 
 EMBEDDING_DIM = config.EMBEDDING_DIM
 
 
+def _conn_kwargs() -> dict:
+    return {
+        "host": config.DB_HOST,
+        "port": config.DB_PORT,
+        "dbname": config.DB_NAME,
+        "user": config.DB_USER,
+        "password": config.DB_PASSWORD,
+    }
+
+
 def get_connection():
-    return psycopg2.connect(
-        host=config.DB_HOST,
-        port=config.DB_PORT,
-        dbname=config.DB_NAME,
-        user=config.DB_USER,
-        password=config.DB_PASSWORD,
-    )
+    """A single direct connection. Used by scripts, ingestion, the CLI and eval."""
+    return psycopg2.connect(**_conn_kwargs())
+
+
+_pool: Optional[ThreadedConnectionPool] = None
+
+
+def get_pool() -> ThreadedConnectionPool:
+    """Lazily-built connection pool for the API.
+
+    FastAPI serves sync endpoints from a thread pool, so a thread-safe pool lets
+    concurrent requests reuse a bounded set of connections instead of opening one
+    per request (which storms Postgres and exhausts its connection slots).
+    """
+    global _pool
+    if _pool is None:
+        _pool = ThreadedConnectionPool(
+            config.DB_POOL_MIN, config.DB_POOL_MAX, **_conn_kwargs()
+        )
+    return _pool
+
+
+def close_pool() -> None:
+    """Close all pooled connections on shutdown. No-op if the pool was never built."""
+    global _pool
+    if _pool is not None:
+        _pool.closeall()
+        _pool = None
 
 
 def init_schema(conn):
