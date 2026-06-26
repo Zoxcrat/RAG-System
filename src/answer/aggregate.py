@@ -149,16 +149,25 @@ def _with_limit(sql: str, limit: int) -> str:
 
 
 def run_select(conn, sql: str) -> tuple[list[str], list[tuple]]:
-    """Execute the SELECT in a read-only transaction."""
+    """Execute the SELECT in its own read-only transaction.
+
+    Defensive about the connection's prior state: ``set_session`` cannot run
+    inside a transaction, and a preceding read on a shared connection may have
+    left one open, so roll that back first. Without this, a lookup-then-aggregate
+    sequence on one connection made every SQL candidate raise here and silently
+    fall back to the semantic path (an aggregation question answered "no info").
+    Always ends the transaction so the connection is left clean for the next use.
+    """
+    conn.rollback()  # discard any transaction the previous caller left open
     conn.set_session(readonly=True)
     try:
         with conn.cursor() as cur:
             cur.execute(sql)
             columns = [d[0] for d in cur.description]
             rows = cur.fetchall()
-        conn.commit()
         return columns, rows
     finally:
+        conn.rollback()  # close this read txn (even if it aborted) before restoring
         conn.set_session(readonly=False)
 
 

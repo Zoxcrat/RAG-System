@@ -26,6 +26,9 @@ class FakeConn:
     def cursor(self):
         return self.cursor_obj
 
+    def rollback(self):  # reads close their transaction; no-op for the fake
+        pass
+
 
 def test_maps_rows_to_dicts_preserving_order(monkeypatch):
     monkeypatch.setattr(retrieve_mod, "embed_text", lambda q: [0.1, 0.2, 0.3])

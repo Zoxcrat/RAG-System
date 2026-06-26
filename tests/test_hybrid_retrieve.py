@@ -70,6 +70,9 @@ class FakeConn:
     def cursor(self):
         return self.cursor_obj
 
+    def rollback(self):  # reads close their transaction; no-op for the fake
+        pass
+
 
 def test_keyword_search_uses_fulltext_and_returns_none_distance():
     rows = [(1, "HANGER-HEADLINER", "cat.pdf", 0, 201)]

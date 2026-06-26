@@ -39,6 +39,10 @@ def retrieve(conn, query: str, top_k: int = DEFAULT_TOP_K) -> list[dict]:
             (vec, top_k),
         )
         rows = cur.fetchall()
+    # Close the implicit read transaction so the connection isn't left idle-in-
+    # transaction (which would break a later set_session in the aggregation path
+    # and holds locks under a connection pool).
+    conn.rollback()
 
     return [_row_to_dict(row, float(row[5])) for row in rows]
 
@@ -69,6 +73,7 @@ def _keyword_search(conn, query: str, limit: int) -> list[dict]:
             (query, limit),
         )
         rows = cur.fetchall()
+    conn.rollback()  # don't leave the connection idle-in-transaction after a read
 
     return [_row_to_dict(row, None) for row in rows]
 
