@@ -1,25 +1,11 @@
 """Listwise LLM reranking of retrieved candidates. Fails open to the hybrid order."""
 import re
-from typing import Optional
-
-from openai import OpenAI
 
 from src import config
+from src.openai_client import get_client as _get_client
 
 RERANK_MODEL = config.RERANK_MODEL
 _SNIPPET_CHARS = 300
-
-_client: Optional[OpenAI] = None
-
-
-def _get_client() -> OpenAI:
-    global _client
-    if _client is None:
-        _client = OpenAI(
-            max_retries=config.OPENAI_MAX_RETRIES,
-            timeout=config.OPENAI_TIMEOUT,
-        )
-    return _client
 
 
 def _build_rerank_prompt(query: str, chunks: list[dict]) -> tuple[str, str]:

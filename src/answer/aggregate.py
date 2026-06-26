@@ -1,10 +1,8 @@
 """Aggregation answers via text-to-SQL over the structured `parts` table."""
 import re
-from typing import Optional
-
-from openai import OpenAI
 
 from src import config
+from src.openai_client import get_client as _get_client
 
 LLM_MODEL = config.AGG_MODEL  # stronger model for the SQL/structural reasoning
 ROW_LIMIT = config.AGG_ROW_LIMIT
@@ -21,15 +19,6 @@ _FORBIDDEN = re.compile(
     r"\b(insert|update|delete|drop|alter|truncate|grant|revoke|create|copy|merge|into)\b",
     re.IGNORECASE,
 )
-
-_client: Optional[OpenAI] = None
-
-
-def _get_client() -> OpenAI:
-    global _client
-    if _client is None:
-        _client = OpenAI(max_retries=config.OPENAI_MAX_RETRIES, timeout=config.OPENAI_TIMEOUT)
-    return _client
 
 
 def _chat(system: str, user: str, temperature: float = 0.0) -> str:

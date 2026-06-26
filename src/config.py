@@ -33,11 +33,6 @@ EMBEDDING_DIM = _get_int("EMBEDDING_DIM", 1536)
 # Stays under the OpenAI embeddings limit of 2048 inputs per request.
 EMBED_BATCH_SIZE = _get_int("EMBED_BATCH_SIZE", 1000)
 
-# --- Query expansion (multi-query / RAG-Fusion) ---
-# Off by default: it hurt recall@5 (0.91 -> 0.82) on the eval set. See docs/16-query-expansion-evaluado.md.
-QUERY_EXPANSION_ENABLED = os.getenv("QUERY_EXPANSION_ENABLED", "false").lower() in ("1", "true", "yes")
-QUERY_EXPANSION_N = _get_int("QUERY_EXPANSION_N", 3)  # total queries incl. the original
-
 # --- Retrieval (hybrid search) ---
 # Candidates per arm before fusing; kept larger than top_k so one arm can rescue the other.
 RETRIEVAL_CANDIDATES = _get_int("RETRIEVAL_CANDIDATES", 20)

@@ -55,14 +55,14 @@ Dependencies flow in one direction (no cycles):
 src/
   config, db, embed     shared
   api, main             entrypoints
-  ingestion/  pdf_loader, ingest, parts
-  retrieval/  retrieve, rerank, expand
+  ingestion/  pdf_loader, ingest, vision_parts
+  retrieval/  retrieve, rerank
   answer/     rag, aggregate
 
-api ──► answer/rag ──┬─► retrieval/retrieve ──► retrieval/expand, embed ──► (OpenAI)
+api ──► answer/rag ──┬─► retrieval/retrieve ──► embed ──► (OpenAI)
  │                   ├─► retrieval/rerank ───────────────────────────────► (OpenAI)
  │                   └─► answer/aggregate ──► text-to-SQL over parts ─────► (OpenAI)
-main ──► ingestion/ingest ──► ingestion/parts, embed, db
+main ──► ingestion/ingest ──► ingestion/vision_parts, embed, db
  │       ingestion/pdf_loader (PDF → OCR JSON) ──feeds──┘
  └──► db ──► (PostgreSQL + PGVector)
 
@@ -77,9 +77,8 @@ every module ──► config ──► (environment / .env)
 | **ingestion/** `pdf_loader` | Scanned PDF → per-page OCR text (PyMuPDF + Tesseract), JSON cache. |
 | **ingestion/** `ingest` | OCR pages → chunk per page → batch embeddings → idempotent INSERT into `documents`. |
 | **ingestion/** `parts` | Parses the OCR into the structured `parts` table for aggregation. |
-| **retrieval/** `retrieve` | Hybrid search: vector + full-text arms fused with RRF (with optional multi-query). |
+| **retrieval/** `retrieve` | Hybrid search: vector + full-text arms fused with RRF. |
 | **retrieval/** `rerank` | Listwise LLM reranker over the candidates (fail-open). |
-| **retrieval/** `expand` | Query expansion (multi-query); off by default. |
 | **answer/** `rag` | Query orchestration: route → retrieve → gate → rerank → grounded prompt → LLM → response. |
 | **answer/** `aggregate` | Intent router + guarded text-to-SQL over `parts`, with semantic fallback. |
 | `api` | FastAPI: `/health`, `/ask`, `/pdf` (CORS for dev). |

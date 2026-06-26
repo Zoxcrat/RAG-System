@@ -155,8 +155,8 @@ src/
   embed.py         text -> embedding vectors (batched)
   api.py           FastAPI: /health, /ask, /pdf
   main.py          CLI
-  ingestion/       pdf_loader (OCR), ingest (chunk per page), parts (structured parts)
-  retrieval/       retrieve (hybrid + RRF), rerank, expand (off by default)
+  ingestion/       pdf_loader (OCR), ingest (chunks + part cards), vision_parts (structured parts)
+  retrieval/       retrieve (hybrid + RRF), rerank
   answer/          rag (prompt, gate, generation), aggregate (router + text-to-SQL)
 frontend/          React + Vite + TypeScript: PDF viewer and Q&A panel
 eval/              retrieval evaluation (gold set + recall@k / MRR)

@@ -117,26 +117,6 @@ def retrieve_hybrid(
     return reciprocal_rank_fusion([vector_results, keyword_results], top_k)
 
 
-def retrieve_multi(
-    conn,
-    query: str,
-    top_k: int = DEFAULT_TOP_K,
-    candidates: int = RETRIEVAL_CANDIDATES,
-) -> list[dict]:
-    """Multi-query (RAG-Fusion): expand into a few phrasings, retrieve hybrid for
-    each, and fuse with RRF. Falls back to ``retrieve_hybrid`` for a single query.
-    """
-    from src.retrieval.expand import expand_query
-
-    queries = expand_query(query)
-    if len(queries) <= 1:
-        return retrieve_hybrid(conn, query, top_k=top_k, candidates=candidates)
-    ranked_lists = [
-        retrieve_hybrid(conn, q, top_k=candidates, candidates=candidates) for q in queries
-    ]
-    return reciprocal_rank_fusion(ranked_lists, top_k)
-
-
 if __name__ == "__main__":
     conn = get_connection()
     try:

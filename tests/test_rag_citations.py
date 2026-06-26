@@ -33,7 +33,6 @@ def test_build_prompt_handles_chunk_without_page():
 def _patch_pipeline(monkeypatch, chunks, answer="ok"):
     # lookup path: force the aggregation router off
     monkeypatch.setattr(rag, "is_aggregation_query", lambda query: False)
-    monkeypatch.setattr(rag, "retrieve_multi", lambda conn, query, top_k: chunks)
     monkeypatch.setattr(rag, "retrieve_hybrid", lambda conn, query, top_k: chunks)
     # identity rerank (covered in test_rerank)
     monkeypatch.setattr(rag, "rerank", lambda query, c, top_k: c[:top_k])

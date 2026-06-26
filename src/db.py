@@ -91,6 +91,7 @@ def init_schema(conn):
 def reset_db(conn):
     with conn.cursor() as cur:
         cur.execute("DROP TABLE IF EXISTS documents;")
+        cur.execute("DROP TABLE IF EXISTS parts;")
     conn.commit()
     init_schema(conn)
 

@@ -1,16 +1,14 @@
 import re
 from typing import Optional
 
-from openai import OpenAI
-
 from src import config
 from src.answer.aggregate import answer_aggregation, is_aggregation_query
 from src.db import get_connection
+from src.openai_client import get_client as _get_client
 from src.retrieval.rerank import rerank
-from src.retrieval.retrieve import retrieve_hybrid, retrieve_multi
+from src.retrieval.retrieve import retrieve_hybrid
 
 AGG_ENABLED = config.AGG_ENABLED
-QUERY_EXPANSION_ENABLED = config.QUERY_EXPANSION_ENABLED
 LLM_MODEL = config.LLM_MODEL
 DEFAULT_TOP_K = config.DEFAULT_TOP_K
 TEMPERATURE = config.TEMPERATURE
@@ -18,18 +16,6 @@ MAX_TOKENS = config.MAX_TOKENS
 RELEVANCE_THRESHOLD = config.RELEVANCE_THRESHOLD
 RERANK_ENABLED = config.RERANK_ENABLED
 RERANK_CANDIDATES = config.RERANK_CANDIDATES
-
-_client: Optional[OpenAI] = None
-
-
-def _get_client() -> OpenAI:
-    global _client
-    if _client is None:
-        _client = OpenAI(
-            max_retries=config.OPENAI_MAX_RETRIES,
-            timeout=config.OPENAI_TIMEOUT,
-        )
-    return _client
 
 
 def build_prompt(query: str, chunks: list[dict]) -> tuple[str, str]:
@@ -135,10 +121,7 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
 
     # Retrieve a wider candidate set, then rerank down to top_k. The relevance gate
     # runs on candidates first, so an out-of-domain query is refused before reranking.
-    if QUERY_EXPANSION_ENABLED:
-        candidates = retrieve_multi(conn, query, top_k=RERANK_CANDIDATES)
-    else:
-        candidates = retrieve_hybrid(conn, query, top_k=RERANK_CANDIDATES)
+    candidates = retrieve_hybrid(conn, query, top_k=RERANK_CANDIDATES)
     min_dist = _min_distance(candidates)
     relevant = min_dist is not None and min_dist <= RELEVANCE_THRESHOLD
 
