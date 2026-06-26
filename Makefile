@@ -1,4 +1,4 @@
-.PHONY: help up down ps logs init ingest ask test eval compile restart clean install install-dev ocr api \
+.PHONY: help up down ps logs init ingest ask test eval eval-answers compile restart clean install install-dev ocr api \
         docker-build docker-up docker-ingest docker-ask docker-down docker-ocr docker-api
 
 PY := .venv/bin/python
@@ -22,6 +22,7 @@ help:
 	@echo "  make ask            Run the interactive RAG demo"
 	@echo "  make test           Run the pytest suite (no API calls)"
 	@echo "  make eval           Evaluate retrieval (vector vs hybrid) on the gold set"
+	@echo "  make eval-answers   Evaluate end-to-end answer quality on the typed set"
 	@echo "  make ocr            OCR a PDF locally (needs tesseract; PDF=path)"
 	@echo "  make api            Run the FastAPI backend locally (uvicorn, port 8000)"
 	@echo ""
@@ -67,6 +68,9 @@ test:
 
 eval: up
 	$(PY) -m eval.evaluate
+
+eval-answers: up
+	$(PY) -m eval.evaluate_answers
 
 compile:
 	$(PY) -c "import src.db, src.embed, src.ingestion.ingest, src.retrieval.retrieve, src.answer.rag, src.main; print('all modules import OK')"

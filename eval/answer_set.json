@@ -1,0 +1,27 @@
+{
+  "description": "End-to-end answer-quality eval. Unlike gold_set.json (retrieval recall@k by page), this runs the full ask() pipeline (routing -> aggregation/semantic -> generation) and checks the ANSWER against ground truth verified from the parts/documents data. Assertions: must_include (all substrings present, case-insensitive), must_include_any (>=1 per group), expect_pages (subset of cited pages; only on lookups, where page-truth is clean), expected_mode ('lookup'|'aggregate'), must_refuse (out-of-domain).",
+  "items": [
+    { "question": "What is the part number for the radio shelf?", "type": "lookup", "expected_mode": "lookup", "must_include": ["0512017-1"], "expect_pages": [202] },
+    { "question": "What is the part number for the headliner hanger?", "type": "lookup", "expected_mode": "lookup", "must_include": ["0411680"], "expect_pages": [201] },
+    { "question": "Where is the dorsal assembly listed?", "type": "lookup", "expected_mode": "lookup", "must_include": ["0531006-1"], "expect_pages": [203] },
+    { "question": "What is the part number for the control yoke assembly?", "type": "lookup", "expected_mode": "lookup", "must_include": ["0560006-5"], "expect_pages": [481] },
+    { "question": "What is the part number for the rear baggage compartment panel?", "type": "lookup", "expected_mode": "lookup", "must_include": ["0511470-4"], "expect_pages": [32, 33, 34, 35, 37, 38, 40, 42], "note": "0511470-4 is listed across the baggage-compartment pages 32-42" },
+    { "question": "What is the part number for the true airspeed ring assembly?", "type": "lookup", "expected_mode": "lookup", "must_include": ["0700189-4"], "expect_pages": [360] },
+    { "question": "What is the part number for the left main landing gear spring?", "type": "lookup", "expected_mode": "lookup", "must_include_any": [["0541198"]], "expect_pages": [241], "note": "LH spring has sibling part numbers (0541198-5 / -9); accept the family" },
+    { "question": "What is the part number for the overhead console support?", "type": "lookup", "expected_mode": "lookup", "must_include": ["0413503-8"], "expect_pages": [601] },
+
+    { "question": "How many ribs per main wing side?", "type": "count", "expected_mode": "aggregate", "must_include": ["14"], "note": "COUNT(DISTINCT station) of main ribs, symmetric LH=RH=14" },
+
+    { "question": "List all adhesives used.", "type": "list", "expected_mode": "aggregate", "must_include": ["EC2216B/A", "EC880", "EC776"], "note": "adhesives on the materials page (p72-73)" },
+    { "question": "List all sealants used.", "type": "list", "expected_mode": "aggregate", "must_include": ["576.1", "579.6", "EC1239A-B"], "note": "extruded/catalytic sealants on p72" },
+
+    { "question": "What is the most common fastener?", "type": "superlative", "expected_mode": "aggregate", "must_include": ["screw"], "must_include_any": [["rivet"]], "note": "screws lead by catalog units (3145); honest answer notes rivets are under-counted" },
+    { "question": "What is the most common fastener? Are Phillips screws used more than hex or torx?", "type": "superlative", "expected_mode": "aggregate", "must_include": ["screw"], "must_include_any": [["torx"], ["does not specify", "not specified", "no drive", "drive type", "absent", "does not list", "not listed"]], "note": "drive types not in catalog: phillips=0 hex=1 torx=0" },
+
+    { "question": "What assembly is the headliner hanger part of?", "type": "prose", "expected_mode": "lookup", "must_include_any": [["fuselage aft section", "aft section"]], "note": "section context from the vision card" },
+    { "question": "What is part C1-C2 used for?", "type": "prose", "expected_mode": "lookup", "must_include_any": [["cement", "adhesive", "epoxy", "plastic"]], "note": "Conley-Weld epoxy base adhesive for cementing plastic/fiberglass/metal" },
+
+    { "question": "What is the capital of France?", "type": "out_of_domain", "must_refuse": true },
+    { "question": "How do I bake a chocolate cake?", "type": "out_of_domain", "must_refuse": true }
+  ]
+}
