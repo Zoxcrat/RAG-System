@@ -52,6 +52,10 @@ AGG_ROW_LIMIT = _get_int("AGG_ROW_LIMIT", 200)
 # Sample this many SQL candidates and take the majority result (1 = no voting). Needs temperature > 0.
 AGG_SELF_CONSISTENCY = _get_int("AGG_SELF_CONSISTENCY", 3)
 AGG_SAMPLE_TEMPERATURE = _get_float("AGG_SAMPLE_TEMPERATURE", 0.4)
+# Aggregation (text-to-SQL + answer) uses a stronger model than the rest: the
+# census-vs-variety reasoning and structural breakdowns (ribs by sub-type/side)
+# need it. Few, small calls, so the cost is negligible.
+AGG_MODEL = os.getenv("AGG_MODEL", "gpt-4o")
 
 # --- Reranking ---
 # LLM reranker reorders the candidates after hybrid retrieval; disable to keep the fused order.

@@ -6,12 +6,15 @@ from openai import OpenAI
 
 from src import config
 
-LLM_MODEL = config.LLM_MODEL
+LLM_MODEL = config.AGG_MODEL  # stronger model for the SQL/structural reasoning
 ROW_LIMIT = config.AGG_ROW_LIMIT
 SELF_CONSISTENCY = config.AGG_SELF_CONSISTENCY
 SAMPLE_TEMPERATURE = config.AGG_SAMPLE_TEMPERATURE
 
-PARTS_SCHEMA = "parts(part_number TEXT, description TEXT, page_number INTEGER, figure TEXT)"
+PARTS_SCHEMA = (
+    "parts(part_number TEXT, description TEXT, page_number INTEGER, figure TEXT, "
+    "units_per_assy INTEGER, usable_on TEXT, station TEXT, index_no TEXT)"
+)
 
 # Reject anything that mutates state or chains a second statement.
 _FORBIDDEN = re.compile(
@@ -59,23 +62,51 @@ def generate_sql(query: str, temperature: float = 0.0) -> str:
         "Translate the question into ONE read-only PostgreSQL SELECT over this table:\n"
         f"  {PARTS_SCHEMA}\n"
         "Notes:\n"
-        "- description is UPPERCASE OCR text, e.g. 'RIB ASSEMBLY-LH', 'SCREW', 'NUT'.\n"
+        "- description is UPPERCASE OCR text, e.g. 'RIB ASSEMBLY-LH STA 23.625', 'SCREW', 'NUT'.\n"
         "- figure is the assembly/section a part belongs to, e.g. 'Wing Structure Assembly'.\n"
+        "- units_per_assy = how many units of that part go in its assembly (the catalog's\n"
+        "  physical count). usable_on = serial/model code ('AR' means as-required/bulk).\n"
+        "  station = wing station for structural parts (e.g. '23.625'), NULL otherwise.\n"
         "- Use ILIKE with % wildcards for text matching (descriptions vary).\n"
-        "- Count parts with COUNT(DISTINCT part_number); never restrict to a single page\n"
-        "  unless the question asks about one page.\n"
-        "- To scope to a system, match figure, e.g. figure ILIKE '%wing%'.\n"
-        "- For 'most common' questions, GROUP BY the relevant keyword across the WHOLE\n"
-        "  table and ORDER BY the count DESC (return the top groups, not one page).\n"
+        "- Watch substrings: 'cement' is inside 'reinforcement', so when matching 'cement'\n"
+        "  add AND description NOT ILIKE '%reinforcement%'. For 'rib', match descriptions that\n"
+        "  start with it or have it as a word: (description ILIKE 'RIB%' OR description ILIKE '% RIB%').\n"
+        "- CHOOSE THE MEASURE BY INTENT (this is the key decision):\n"
+        "    * physical count / 'how many are there' / 'most common' / totals -> SUM(units_per_assy)\n"
+        "      (the catalog's physical units), NOT COUNT(DISTINCT part_number).\n"
+        "    * 'how many kinds/types/variants/distinct part numbers' -> COUNT(DISTINCT part_number).\n"
+        "    * counting physical positions of a structural part (e.g. ribs) -> COUNT(DISTINCT station).\n"
+        "- A part's side appears as '-LH'/' LH' or '-RH'/' RH' anywhere in description; match both\n"
+        "  forms: (description ILIKE '%-LH%' OR description ILIKE '% LH%').\n"
+        "- Structural counts want a breakdown by SUB-TYPE, not one lumped number. Example —\n"
+        "  ribs per wing side broken down (the answer should read like 'N main, M nose, ...'):\n"
+        "  SELECT CASE\n"
+        "           WHEN description ILIKE '%TRAILING EDGE%' THEN 'trailing-edge'\n"
+        "           WHEN description ILIKE '%NOSE%' OR description ILIKE '%LEADING EDGE%' THEN 'nose'\n"
+        "           WHEN description ILIKE '%FUEL CELL%' OR description ILIKE '%FUEL TANK%' THEN 'fuel-cell'\n"
+        "           ELSE 'main' END AS subtype,\n"
+        "         COUNT(DISTINCT station) FILTER (WHERE description ILIKE '%-LH%' OR description ILIKE '% LH%') AS lh,\n"
+        "         COUNT(DISTINCT station) FILTER (WHERE description ILIKE '%-RH%' OR description ILIKE '% RH%') AS rh,\n"
+        "         (array_agg(DISTINCT page_number))[1:3] AS page_number\n"
+        "  FROM parts WHERE figure ILIKE '%wing%' AND (description ILIKE 'RIB%' OR description ILIKE '% RIB%')\n"
+        "  GROUP BY subtype ORDER BY subtype\n"
+        "- 'List all X' / 'which X are used' is a LISTING, not a count: SELECT part_number,\n"
+        "  description, units_per_assy, page_number for the matching rows (DISTINCT part_number),\n"
+        "  ORDER BY page_number. Match X AND its near-synonyms/brands, e.g. adhesives also read as\n"
+        "  'ADHESIVE','SEALANT','CEMENT','EPOXY' and by spec/brand ('EC','LOCTITE','CONLEY');\n"
+        "  combine them with OR (ILIKE), and exclude 'reinforcement' from the 'cement' term.\n"
+        "- To scope to a system/section, match figure, e.g. figure ILIKE '%wing%' (figure may be\n"
+        "  NULL on some rows; for structural counts you can also rely on station/description).\n"
         "- Always include page_number (or an aggregate of pages) so the answer can cite pages;\n"
         "  for grouped queries use e.g. (array_agg(DISTINCT page_number))[1:3] AS page_number.\n"
-        "- 'Most common <category>' means compare the TYPES within that category, not parts whose\n"
-        "  description literally contains the word. Example — most common fastener type:\n"
-        "  SELECT t.type, COUNT(DISTINCT p.part_number) AS n,\n"
+        "- 'Most common <category>' means compare the TYPES within that category by PHYSICAL\n"
+        "  usage. Example — most common fastener type:\n"
+        "  SELECT t.type, SUM(p.units_per_assy) AS physical_units,\n"
+        "         COUNT(DISTINCT p.part_number) AS distinct_part_numbers,\n"
         "         (array_agg(DISTINCT p.page_number))[1:3] AS page_number\n"
         "  FROM parts p JOIN unnest(ARRAY['screw','rivet','bolt','nut','washer','pin','clamp'])\n"
-        "       AS t(type) ON p.description ILIKE '%' || t.type || '%'\n"
-        "  GROUP BY t.type ORDER BY n DESC\n"
+        "       AS t(type) ON p.description ILIKE ('%' || t.type || '%')\n"
+        "  GROUP BY t.type ORDER BY physical_units DESC NULLS LAST\n"
         "Return ONLY the SQL: a single SELECT, no semicolon, no markdown, no explanation.",
         f"Question: {query}",
         temperature=temperature,
@@ -124,13 +155,24 @@ def _format_answer(query: str, columns: list[str], rows: list[tuple]) -> str:
         table = "(no rows)"
     return _chat(
         "Answer the question using ONLY these SQL results from an aircraft parts catalog. "
-        "Be concise and concrete. When the answer is a count or a comparison of categories "
-        "(e.g. 'most common type'), make explicit that the numbers are the count of distinct "
-        "part numbers listed in the catalog, not how often each part is physically used. "
-        "Cite the most relevant page(s) using the page_number column in the EXACT format "
-        "[page N], each page in its own brackets, e.g. [page 12] [page 15] (never "
-        "[page 12, 15]). Cite only the few pages that support the answer, not every page. "
-        "If the results are empty or don't support an answer, say you don't have enough "
+        "Be concise and concrete, and give a structured breakdown when the data has sub-groups. "
+        "State the MEASURE the numbers represent, reading it from the column names: "
+        "'physical_units' / SUM of units_per_assy = the catalog's units-per-assembly (physical "
+        "count); 'distinct_part_numbers' = how many distinct part numbers (catalog variety); "
+        "distinct stations = physical positions. Do not call one the other.\n"
+        "Honesty about the source (state the relevant caveat when it applies):\n"
+        "- A spare-parts catalog UNDER-COUNTS rivets and other as-required hardware: they are "
+        "specified per engineering drawing, not fully enumerated per assembly. So if units_per_assy "
+        "ranks screws above rivets, say that this reflects the catalog's listings, and note that in "
+        "actual airframe construction rivets are the most numerous fastener — the catalog just does "
+        "not count them that way.\n"
+        "- If the question asks for an attribute the rows do not contain (e.g. screw drive type "
+        "Phillips/hex/torx), say the catalog does not specify it; if a type is simply absent, say so.\n"
+        "When listing items, include each item's part_number (the question asks for them).\n"
+        "Cite pages ONLY from the page_number column, in the EXACT format [page N], each page in its "
+        "own brackets, e.g. [page 12] [page 15] (never [page 12, 15]). If there is no page_number "
+        "column, cite no pages — never turn a count or any other number into a page. Cite only the "
+        "few pages that support the answer. If the results are empty, say you don't have enough "
         "information. Never invent data not in the rows.",
         f"Question: {query}\nColumns: {', '.join(columns)}\nRows:\n{table}",
     )
