@@ -133,21 +133,34 @@ if __name__ == "__main__":
         init_schema(conn)
         if len(sys.argv) > 1:
             # Usage: python -m src.ingestion.ingest <pages.json> [source_name]
+            # One command rebuilds the full serving state from the cached artifacts
+            # (OCR json + vision json): the documents retrieval table and the
+            # structured parts table, both kept in sync with the vision extraction.
             from src.ingestion.pdf_loader import load_extracted_text
+            from src.ingestion.vision_parts import (
+                ingest_part_cards,
+                ingest_parts_from_vision,
+            )
 
             json_path = sys.argv[1]
             source = sys.argv[2] if len(sys.argv) > 2 else os.path.basename(json_path)
             pages = load_extracted_text(json_path)
+
+            # documents = flat-OCR prose chunks (narrative) + clean per-part cards
+            # rebuilt from the vision rows (lookups). Two complementary views of
+            # each page, fused at retrieval time.
             n = ingest_pages(conn, pages, source)
             print(
-                f"Ingested {n} new chunks from {json_path} "
+                f"Ingested {n} new OCR chunks from {json_path} "
                 f"({len(pages)} pages, source={source!r})"
             )
-            # Rebuild the structured parts table for aggregation queries.
-            from src.ingestion.parts import ingest_parts
+            n_cards = ingest_part_cards(conn, ocr_path=json_path)
+            print(f"Added {n_cards} new structured part-card chunks")
 
-            n_parts = ingest_parts(conn, pages)
-            print(f"Extracted {n_parts} parts into the parts table")
+            # parts = rebuilt from the vision extraction (recovers units_per_assy,
+            # usable_on and station that flat OCR destroys), not a line parser.
+            n_parts = ingest_parts_from_vision(conn, ocr_path=json_path)
+            print(f"Loaded {n_parts} parts from the vision extraction")
         else:
             n = ingest_file(conn, SAMPLE_DOCS_PATH)
             print(f"Ingested {n} chunks from {SAMPLE_DOCS_PATH}")

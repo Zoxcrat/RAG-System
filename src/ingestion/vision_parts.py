@@ -27,6 +27,11 @@ POLL_SECONDS = 20
 
 DEFAULT_PDF = "data/Cessna 172 Parts Catalog (1963-1974).pdf"
 DEFAULT_CACHE = "data/cessna_172_parts_vision.json"
+DEFAULT_OCR = "data/cessna_172_ocr.json"
+# Source tag for the structured chunks fed into the `documents` retrieval table,
+# kept distinct from the flat-OCR source so the two representations never collide
+# on content_hash and stay individually traceable.
+CARDS_SOURCE = "cessna_172_parts_vision"
 
 SYSTEM = (
     "You extract rows from a scanned Cessna Illustrated Parts Catalog (IPC) page. "
@@ -182,8 +187,56 @@ def page_figure_map(ocr_path: str) -> dict[int, str]:
     return mapping
 
 
+def _card_text(row: dict, figure: Optional[str]) -> str:
+    """A clean, self-contained sentence describing one catalog part.
+
+    Flat OCR stores this line mangled and interleaved with its neighbours
+    ('0512017-1 SHELF-RADIO' buried between 'NUTPLATE —' and 'ATTACHING PARTS'),
+    so its embedding never matches a natural-language part query. Rebuilt from the
+    vision row, the chunk carries the part number, description and its section
+    context together (contextual retrieval), which is what the lookup path needs.
+    """
+    pn = (row.get("part_number") or "").strip()
+    desc = (row.get("description") or "").strip()
+    head = f"Part {pn}: {desc}" if desc else f"Part {pn}"
+    bits: list[str] = []
+    if figure:
+        bits.append(f"Section: {figure}")
+    if row.get("station"):
+        bits.append(f"wing station {row['station']}")
+    qty = row.get("units_per_assy")
+    if isinstance(qty, int):
+        bits.append(f"{qty} per assembly")
+    return f"{head}. " + (", ".join(bits) + "." if bits else "")
+
+
+def ingest_part_cards(conn, cache_path: str = DEFAULT_CACHE,
+                      ocr_path: str = DEFAULT_OCR) -> int:
+    """Add clean per-part chunks (from the vision rows) to the `documents` table.
+
+    Additive to the flat-OCR chunks, not a replacement: OCR keeps the running
+    prose (intro notes, narrative) that a parts row has no equivalent for, while
+    these cards give the semantic path a noise-free representation of every part
+    line. Reuses the ingest store (batch embed + content_hash dedup), so it is
+    idempotent. Returns the number of new chunks inserted.
+    """
+    from src.ingestion.ingest import _store_records
+
+    cache = load_cache(cache_path)
+    fig_map = page_figure_map(ocr_path) if os.path.exists(ocr_path) else {}
+    records = []
+    for page_str, payload in cache.items():
+        page = int(page_str)
+        figure = fig_map.get(page)
+        for r in payload.get("rows", []):
+            if not (r.get("part_number") or "").strip():
+                continue
+            records.append((_card_text(r, figure), CARDS_SOURCE, len(records), page))
+    return _store_records(conn, records)
+
+
 def ingest_parts_from_vision(conn, cache_path: str = DEFAULT_CACHE,
-                             ocr_path: str = "data/cessna_172_ocr.json") -> int:
+                             ocr_path: str = DEFAULT_OCR) -> int:
     """Rebuild the `parts` table from the cached vision rows. Returns row count."""
     from psycopg2.extras import execute_values
 
