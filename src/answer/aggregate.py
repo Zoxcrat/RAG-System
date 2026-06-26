@@ -43,13 +43,38 @@ def _chat(system: str, user: str, temperature: float = 0.0) -> str:
 
 # --- routing ---------------------------------------------------------------
 
+# Unambiguous aggregation cues. Routing is biased toward AGGREGATE on purpose:
+# the two failure modes are asymmetric. A lookup misrouted to aggregation
+# self-corrects (empty SQL -> ok=False -> semantic fallback), but an aggregation
+# question misrouted to lookup does not — it just retrieves a few chunks and
+# answers "not enough info". So when a clear counting/listing cue is present we
+# skip the LLM classifier entirely (it flakes exactly here, e.g. reading "how
+# many ribs per side" as a lookup).
+_AGG_CUE_RE = re.compile(
+    r"\b(how many|how much|how often|number of|total (number|count|amount|quantity)|"
+    r"count (of|the)|list (all|every|each|the)|all (the )?(adhesives|sealants|"
+    r"fasteners|screws|parts|bolts|rivets)|(most|least) (common|used|frequent|"
+    r"numerous|popular)|which .+ (are|is) used)\b",
+    re.IGNORECASE,
+)
+
+
 def is_aggregation_query(query: str) -> bool:
     """True if the question needs aggregation over the whole catalog vs. a lookup."""
+    if _AGG_CUE_RE.search(query):
+        return True
     answer = _chat(
         "You classify questions about an aircraft parts catalog. Answer with ONE word: "
-        "AGGREGATE if the question needs to scan/aggregate the whole catalog (counting, "
-        "listing all of something, most/least common, totals, grouping); LOOKUP if it asks "
-        "for a single specific fact (a part number, what a part is, where something is).",
+        "AGGREGATE if the question needs to scan or aggregate across the catalog (counting, "
+        "listing all of something, most/least common, totals, grouping, comparing usage); "
+        "LOOKUP only if it asks for ONE specific fact about ONE part (its part number, what a "
+        "single part is, where one thing is listed). When unsure, answer AGGREGATE.\n"
+        "Examples:\n"
+        "Q: how many ribs per main wing side? -> AGGREGATE\n"
+        "Q: list all adhesives used -> AGGREGATE\n"
+        "Q: what is the most common fastener? -> AGGREGATE\n"
+        "Q: what is the part number for the radio shelf? -> LOOKUP\n"
+        "Q: where is the dorsal assembly listed? -> LOOKUP",
         f"Question: {query}",
     )
     return "AGGREGATE" in answer.upper()

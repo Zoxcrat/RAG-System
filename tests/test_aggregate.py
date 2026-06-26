@@ -1,5 +1,35 @@
 """Tests for the text-to-SQL guardrails and self-consistency (pure, no DB or API)."""
-from src.answer.aggregate import _result_signature, _with_limit, is_safe_select
+from src.answer.aggregate import (
+    _AGG_CUE_RE,
+    _result_signature,
+    _with_limit,
+    is_aggregation_query,
+    is_safe_select,
+)
+
+
+def test_aggregation_cues_route_without_calling_the_llm(monkeypatch):
+    # A clear counting/listing cue must route to AGGREGATE deterministically; the
+    # LLM classifier flakes exactly on these, so it must not even be consulted.
+    def _boom(*_a, **_k):  # pragma: no cover - asserts the LLM isn't called
+        raise AssertionError("LLM classifier should be bypassed on a clear cue")
+
+    monkeypatch.setattr("src.answer.aggregate._chat", _boom)
+    for q in (
+        "how many ribs per main wing side?",
+        "List all adhesives used",
+        "what is the most common fastener?",
+        "total number of rivets",
+    ):
+        assert is_aggregation_query(q)
+
+
+def test_lookup_questions_have_no_aggregation_cue():
+    for q in (
+        "What is the part number for the radio shelf?",
+        "Where is the dorsal assembly listed?",
+    ):
+        assert not _AGG_CUE_RE.search(q)
 
 
 def test_accepts_read_only_select_on_parts():
