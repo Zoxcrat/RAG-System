@@ -69,7 +69,12 @@ RERANK_MODEL = os.getenv("RERANK_MODEL", LLM_MODEL)
 DEFAULT_TOP_K = _get_int("DEFAULT_TOP_K", 10)
 TEMPERATURE = _get_float("TEMPERATURE", 0.0)
 MAX_TOKENS = _get_int("MAX_TOKENS", 800)
-RELEVANCE_THRESHOLD = _get_float("RELEVANCE_THRESHOLD", 0.5)
+# Min cosine distance above which the semantic path refuses (out-of-domain gate).
+# Recalibrated after adding the vision part cards shifted the distance distribution:
+# measured on the eval set, in-domain tops out at ~0.59 and out-of-domain starts at
+# ~0.74, so 0.65 sits in the gap. See docs/24. (A single global threshold is still
+# crude for a heterogeneous corpus; a per-type gate would be the next refinement.)
+RELEVANCE_THRESHOLD = _get_float("RELEVANCE_THRESHOLD", 0.65)
 
 # --- Ingestion ---
 CHUNK_SIZE = _get_int("CHUNK_SIZE", 500)
