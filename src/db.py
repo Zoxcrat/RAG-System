@@ -66,7 +66,8 @@ def init_schema(conn):
             """
         )
         # Structured parts table for aggregation queries. One row per catalog part
-        # line, rebuilt from OCR on ingest (see src/parts.py).
+        # line. Built from vision-LLM page extraction (see src/ingestion/vision_parts.py),
+        # which recovers the columns flat OCR destroys (units, usable-on, station).
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS parts (
@@ -78,6 +79,12 @@ def init_schema(conn):
             );
             """
         )
+        # Schema v2 columns (the structural signals flat OCR loses). Added to
+        # pre-existing tables idempotently, same policy as the documents table.
+        cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS units_per_assy INTEGER;")
+        cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS usable_on TEXT;")
+        cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS station TEXT;")
+        cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS index_no TEXT;")
     conn.commit()
 
 
