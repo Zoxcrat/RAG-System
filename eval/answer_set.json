@@ -18,6 +18,10 @@
     { "question": "What is the most common fastener?", "type": "superlative", "expected_mode": "aggregate", "must_include": ["screw"], "must_include_any": [["rivet"]], "note": "screws lead by catalog units (3145); honest answer notes rivets are under-counted" },
     { "question": "What is the most common fastener? Are Phillips screws used more than hex or torx?", "type": "superlative", "expected_mode": "aggregate", "must_include": ["screw"], "must_include_any": [["torx"], ["does not specify", "not specified", "no drive", "drive type", "absent", "does not list", "not listed"]], "note": "drive types not in catalog: phillips=0 hex=1 torx=0" },
 
+    { "question": "Which fastener is used more by quantity, screws or bolts?", "type": "superlative", "expected_mode": "aggregate", "must_include": ["screw"], "note": "generalization: screws 3145 units >> bolts 724; not one of the original 3" },
+    { "question": "How many washers are used in total?", "type": "count", "expected_mode": "aggregate", "must_include": ["1493"], "note": "generalization: SUM(units_per_assy) WHERE description ILIKE '%WASHER%'" },
+    { "question": "How many distinct screw part numbers are listed?", "type": "count", "expected_mode": "aggregate", "must_include": ["253"], "note": "generalization: variety measure COUNT(DISTINCT part_number) WHERE '%SCREW%'" },
+
     { "question": "What assembly is the headliner hanger part of?", "type": "prose", "expected_mode": "lookup", "must_include_any": [["fuselage aft section", "aft section"]], "note": "section context from the vision card" },
     { "question": "What is part C1-C2 used for?", "type": "prose", "expected_mode": "lookup", "must_include_any": [["cement", "adhesive", "epoxy", "plastic"]], "note": "Conley-Weld epoxy base adhesive for cementing plastic/fiberglass/metal" },
 
