@@ -26,6 +26,13 @@
     { "question": "What is part C1-C2 used for?", "type": "prose", "expected_mode": "lookup", "must_include_any": [["cement", "adhesive", "epoxy", "plastic"]], "note": "Conley-Weld epoxy base adhesive for cementing plastic/fiberglass/metal" },
 
     { "question": "What is the capital of France?", "type": "out_of_domain", "must_refuse": true },
-    { "question": "How do I bake a chocolate cake?", "type": "out_of_domain", "must_refuse": true }
+    { "question": "How do I bake a chocolate cake?", "type": "out_of_domain", "must_refuse": true },
+
+    { "question": "How many bolts are used in the wing structure?", "type": "count", "tier": "hard", "probes": "B2 scoped", "expected_mode": "aggregate", "must_include": ["38"], "note": "SUM(units_per_assy) WHERE '%BOLT%' AND figure ILIKE '%wing%' = 38" },
+    { "question": "What is the part number of the left-hand wing rib assembly?", "type": "lookup", "tier": "hard", "probes": "B2 precise", "must_include": ["0523010"], "note": "0523010-1 RIB ASSEMBLY-LH at STA 23.625" },
+    { "question": "Are there more distinct screw part numbers or distinct bolt part numbers?", "type": "count", "tier": "hard", "probes": "B3 compare", "expected_mode": "aggregate", "must_include": ["screw"], "note": "253 screw PNs > 151 bolt PNs" },
+    { "question": "Are the headliner hanger and the radio shelf in the same assembly?", "type": "prose", "tier": "hard", "probes": "B3 multi-hop", "must_include_any": [["same", "yes", "both", "fuselage"]], "note": "both in Fuselage Aft Section Assembly (pp 201-202)" },
+    { "question": "What is the torque specification for the wing attach bolts?", "type": "out_of_domain", "tier": "hard", "probes": "B4 honesty", "must_refuse": true, "note": "a parts catalog has no torque specs; must not surface torque-tube parts as an answer" },
+    { "question": "What is the part number for the GPS antenna?", "type": "out_of_domain", "tier": "hard", "probes": "B4 honesty", "must_refuse": true, "note": "no GPS in a 1963-74 catalog; must not invent a part number" }
   ]
 }
