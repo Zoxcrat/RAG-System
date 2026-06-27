@@ -10,7 +10,7 @@
     { "question": "What is the part number for the left main landing gear spring?", "type": "lookup", "expected_mode": "lookup", "must_include_any": [["0541198"]], "expect_pages": [241], "note": "LH spring has sibling part numbers (0541198-5 / -9); accept the family" },
     { "question": "What is the part number for the overhead console support?", "type": "lookup", "expected_mode": "lookup", "must_include": ["0413503-8"], "expect_pages": [601] },
 
-    { "question": "How many ribs per main wing side?", "type": "count", "expected_mode": "aggregate", "must_include": ["14"], "note": "COUNT(DISTINCT station) of main ribs, symmetric LH=RH=14" },
+    { "question": "How many ribs per main wing side?", "type": "count", "expected_mode": "aggregate", "must_include": ["11"], "note": "COUNT(DISTINCT station_num) of main ribs on the STANDARD wing config (figure 'Wing Structure Assembly', pp101/103) = 11 stations per side; matches RealitySearch's 10-11. The old '14' over-counted by mixing the long-range config and un-normalized station strings ('100'/'100.00'/'100.50')." },
 
     { "question": "List all adhesives used.", "type": "list", "expected_mode": "aggregate", "must_include": ["EC2216B/A", "EC880", "EC776"], "note": "adhesives on the materials page (p72-73)" },
     { "question": "List all sealants used.", "type": "list", "expected_mode": "aggregate", "must_include": ["576.1", "579.6", "EC1239A-B"], "note": "extruded/catalytic sealants on p72" },
@@ -28,7 +28,7 @@
     { "question": "What is the capital of France?", "type": "out_of_domain", "must_refuse": true },
     { "question": "How do I bake a chocolate cake?", "type": "out_of_domain", "must_refuse": true },
 
-    { "question": "How many bolts are used in the wing structure?", "type": "count", "tier": "hard", "probes": "B2 scoped", "expected_mode": "aggregate", "must_include": ["38"], "note": "SUM(units_per_assy) WHERE '%BOLT%' AND figure ILIKE '%wing%' = 38" },
+    { "question": "How many bolts are used in the wing structure?", "type": "count", "tier": "hard", "probes": "B2 scoped", "expected_mode": "aggregate", "must_include_any": [["6", "38"]], "note": "Scope-ambiguous (a client-clarification item): the literal 'Wing Structure Assembly' figure = 6 bolts (standard has 0, long-range 6), while a broad figure ILIKE '%wing%' = 38 but pulls in non-structural wing systems (strut, wing-leveler/autopilot). Both readings are defensible; accept either." },
     { "question": "What is the part number of the left-hand wing rib assembly?", "type": "lookup", "tier": "hard", "probes": "B2 precise", "must_include": ["0523010"], "note": "0523010-1 RIB ASSEMBLY-LH at STA 23.625" },
     { "question": "Are there more distinct screw part numbers or distinct bolt part numbers?", "type": "count", "tier": "hard", "probes": "B3 compare", "expected_mode": "aggregate", "must_include": ["screw"], "note": "253 screw PNs > 151 bolt PNs" },
     { "question": "Are the headliner hanger and the radio shelf in the same assembly?", "type": "prose", "tier": "hard", "probes": "B3 multi-hop", "must_include_any": [["same", "yes", "both", "fuselage"]], "note": "both in Fuselage Aft Section Assembly (pp 201-202)" },

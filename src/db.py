@@ -119,6 +119,16 @@ def init_schema(conn):
         cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS usable_on TEXT;")
         cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS station TEXT;")
         cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS index_no TEXT;")
+        # Schema v3: typed columns derived once at ingest from the free-text fields
+        # (see src/ingestion/normalize.py). Aggregation groups on these instead of
+        # re-deriving them with ILIKE in every generated SQL. station_num collapses
+        # OCR/format variants of a station; variant separates the standard wing from
+        # the long-range one (the rib over-count came from mixing them).
+        cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS station_num DOUBLE PRECISION;")
+        cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS side TEXT;")
+        cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS part_category TEXT;")
+        cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS sub_type TEXT;")
+        cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS variant TEXT;")
     conn.commit()
 
 

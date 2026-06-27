@@ -237,8 +237,15 @@ def ingest_part_cards(conn, cache_path: str = DEFAULT_CACHE,
 
 def ingest_parts_from_vision(conn, cache_path: str = DEFAULT_CACHE,
                              ocr_path: str = DEFAULT_OCR) -> int:
-    """Rebuild the `parts` table from the cached vision rows. Returns row count."""
+    """Rebuild the `parts` table from the cached vision rows. Returns row count.
+
+    Derives the typed columns (station_num, side, part_category, sub_type, variant)
+    from each row's free text at load time (see src/ingestion/normalize.py), so the
+    aggregation SQL groups on clean columns instead of re-deriving them per query.
+    """
     from psycopg2.extras import execute_values
+
+    from src.ingestion.normalize import classify
 
     cache = load_cache(cache_path)
     fig_map = page_figure_map(ocr_path) if os.path.exists(ocr_path) else {}
@@ -251,15 +258,23 @@ def ingest_parts_from_vision(conn, cache_path: str = DEFAULT_CACHE,
             if not pn:
                 continue
             qty = r.get("units_per_assy")
+            description = (r.get("description") or "").strip() or None
+            station = r.get("station") or None
+            typed = classify(description, station, figure)
             rows.append((
                 pn,
-                (r.get("description") or "").strip() or None,
+                description,
                 page,
                 figure,  # section caption carried forward from OCR (page_figure_map)
                 qty if isinstance(qty, int) else None,
                 (r.get("usable_on") or None),
-                (r.get("station") or None),
+                station,
                 (r.get("index_no") or None),
+                typed["station_num"],
+                typed["side"],
+                typed["part_category"],
+                typed["sub_type"],
+                typed["variant"],
             ))
     with conn.cursor() as cur:
         cur.execute("TRUNCATE parts RESTART IDENTITY;")
@@ -267,7 +282,8 @@ def ingest_parts_from_vision(conn, cache_path: str = DEFAULT_CACHE,
             execute_values(
                 cur,
                 "INSERT INTO parts (part_number, description, page_number, figure, "
-                "units_per_assy, usable_on, station, index_no) VALUES %s",
+                "units_per_assy, usable_on, station, index_no, "
+                "station_num, side, part_category, sub_type, variant) VALUES %s",
                 rows,
             )
     conn.commit()
