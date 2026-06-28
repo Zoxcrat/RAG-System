@@ -1,0 +1,13 @@
+# Railway uses this instead of .gitignore to decide what to upload as build
+# context. We DO want data/ (the catalog PDF is git-ignored but needed at runtime
+# for the /pdf viewer), so only exclude heavy/dev-only paths here.
+.git
+.venv
+**/__pycache__
+*.pyc
+.pytest_cache
+**/node_modules
+frontend/dist
+docs
+PLAN.md
+CLAUDE.md
