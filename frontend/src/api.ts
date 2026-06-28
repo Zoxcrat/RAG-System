@@ -1,7 +1,7 @@
 import type { AskResponse } from './types';
 
-// Override with VITE_API_BASE.
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+// Same-origin by default (the API serves this build); override with VITE_API_BASE.
+const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 
 export const PDF_URL = `${API_BASE}/pdf`;
 

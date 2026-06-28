@@ -1,3 +1,11 @@
+# Build the frontend in a Node stage, then copy the static bundle into the app image.
+FROM node:22-slim AS frontend
+WORKDIR /web
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -5,10 +13,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# System dependencies. Tesseract is the OCR engine used by src/pdf_loader.py to
-# read the scanned catalog; baking it into the image keeps OCR reproducible
-# instead of depending on what's installed on the host. The English language
-# pack ships with the tesseract-ocr package. Clean apt lists to keep it small.
+# Tesseract is the OCR engine used by src/pdf_loader.py to read the scanned catalog.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
@@ -24,6 +29,9 @@ COPY src/ ./src/
 COPY data/ ./data/
 COPY docker/entrypoint.sh ./docker/entrypoint.sh
 RUN chmod +x ./docker/entrypoint.sh
+
+# Static frontend built in the Node stage, served by the API at the same origin.
+COPY --from=frontend /web/dist ./frontend/dist
 
 # Default command is the CLI; the api service (docker-compose) overrides it with
 # uvicorn and serves HTTP on this port.

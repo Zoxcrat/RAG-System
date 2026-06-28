@@ -1,11 +1,14 @@
-"""FastAPI HTTP layer for the RAG pipeline: /health, /ask, /pdf."""
+"""FastAPI HTTP layer for the RAG pipeline: /health, /ask, /pdf, and the static UI."""
+import base64
 import os
+import secrets
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src import config
@@ -27,6 +30,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def require_password(request: Request, call_next):
+    """Gate the whole app behind HTTP Basic auth when DEMO_PASSWORD is set."""
+    if config.DEMO_PASSWORD:
+        header = request.headers.get("Authorization", "")
+        ok = False
+        if header.startswith("Basic "):
+            try:
+                user, _, pw = base64.b64decode(header[6:]).decode().partition(":")
+                ok = secrets.compare_digest(pw, config.DEMO_PASSWORD) and (
+                    not config.DEMO_USER or secrets.compare_digest(user, config.DEMO_USER)
+                )
+            except Exception:  # malformed header -> treat as unauthorized
+                ok = False
+        if not ok:
+            return Response(status_code=401, headers={"WWW-Authenticate": "Basic"})
+    return await call_next(request)
 
 
 class AskRequest(BaseModel):
@@ -90,3 +112,9 @@ def pdf() -> FileResponse:
     return FileResponse(
         path, media_type="application/pdf", filename=os.path.basename(path)
     )
+
+
+# Serve the built frontend from the same origin (one service, no CORS in prod).
+# Mounted last so the API routes above take precedence.
+if os.path.isdir(config.FRONTEND_DIR):
+    app.mount("/", StaticFiles(directory=config.FRONTEND_DIR, html=True), name="frontend")

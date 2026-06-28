@@ -78,3 +78,8 @@ CHUNK_OVERLAP = _get_int("CHUNK_OVERLAP", 100)
 # PDF served to the frontend viewer (GET /pdf).
 PDF_PATH = os.getenv("PDF_PATH", "data/Cessna 172 Parts Catalog (1963-1974).pdf")
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+# Built frontend served by the API (same origin). Missing dir -> API only.
+FRONTEND_DIR = os.getenv("FRONTEND_DIR", "frontend/dist")
+# Optional HTTP Basic gate for the public demo; unset -> open.
+DEMO_USER = os.getenv("DEMO_USER", "")
+DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "")
