@@ -1,5 +1,15 @@
 """Unit tests for the clean per-part chunks fed into the documents table."""
-from src.ingestion.vision_parts import _card_text
+from src.ingestion.vision_parts import _card_text, is_real_part_number
+
+
+def test_is_real_part_number_rejects_cross_reference_placeholders():
+    # 'SEE FIG N' rows point to another figure; they are not catalog parts.
+    assert is_real_part_number("0523010-1") is True
+    assert is_real_part_number("LOCTITE 872L") is True
+    assert is_real_part_number("SEE FIG 11") is False
+    assert is_real_part_number("SEE FIGURE 30") is False
+    assert is_real_part_number("") is False
+    assert is_real_part_number(None) is False
 
 
 def test_card_text_includes_part_number_description_and_context():

@@ -72,11 +72,23 @@ def render_jpeg_b64(pdf_path: str, page_number: int) -> str:
     return base64.b64encode(data).decode()
 
 
+# 'SEE FIG 11' rows are cross-references — the part is enumerated in another
+# figure, not here. They carry no real part number, unit or category, so in the
+# parts table they would corrupt 'list all' and COUNT(DISTINCT part_number).
+_PLACEHOLDER_PN_RE = re.compile(r"^\s*SEE\b", re.IGNORECASE)
+
+
+def is_real_part_number(pn: Optional[str]) -> bool:
+    """False for empty values and cross-reference placeholders ('SEE FIG 11')."""
+    pn = (pn or "").strip()
+    return bool(pn) and not _PLACEHOLDER_PN_RE.match(pn)
+
+
 def _parse_rows(text: str) -> list[dict]:
     text = re.sub(r"```(?:json)?", "", text).replace("```", "").strip()
     rows = json.loads(text).get("rows", [])
-    # Drop header bleed / junk: a row is only useful with a part number.
-    return [r for r in rows if (r.get("part_number") or "").strip()]
+    # Drop header bleed / junk: a row is only useful with a real part number.
+    return [r for r in rows if is_real_part_number(r.get("part_number"))]
 
 
 def _page_count(pdf_path: str) -> int:
@@ -229,7 +241,7 @@ def ingest_part_cards(conn, cache_path: str = DEFAULT_CACHE,
         page = int(page_str)
         figure = fig_map.get(page)
         for r in payload.get("rows", []):
-            if not (r.get("part_number") or "").strip():
+            if not is_real_part_number(r.get("part_number")):
                 continue
             records.append((_card_text(r, figure), CARDS_SOURCE, len(records), page))
     return _store_records(conn, records)
@@ -254,9 +266,9 @@ def ingest_parts_from_vision(conn, cache_path: str = DEFAULT_CACHE,
         page = int(page_str)
         figure = fig_map.get(page)
         for r in payload.get("rows", []):
-            pn = (r.get("part_number") or "").strip()
-            if not pn:
+            if not is_real_part_number(r.get("part_number")):
                 continue
+            pn = r.get("part_number").strip()
             qty = r.get("units_per_assy")
             description = (r.get("description") or "").strip() or None
             station = r.get("station") or None
