@@ -10,7 +10,7 @@
     { "question": "What is the part number for the left main landing gear spring?", "type": "lookup", "expected_mode": "lookup", "must_include_any": [["0541198"]], "expect_pages": [241], "note": "LH spring has sibling part numbers (0541198-5 / -9); accept the family" },
     { "question": "What is the part number for the overhead console support?", "type": "lookup", "expected_mode": "lookup", "must_include": ["0413503-8"], "expect_pages": [601] },
 
-    { "question": "How many ribs per main wing side?", "type": "count", "expected_mode": "aggregate", "must_include": ["11"], "note": "COUNT(DISTINCT station_num) of main ribs on the STANDARD wing config (figure 'Wing Structure Assembly', pp101/103) = 11 stations per side; matches RealitySearch's 10-11. The old '14' over-counted by mixing the long-range config and un-normalized station strings ('100'/'100.00'/'100.50')." },
+    { "question": "How many ribs per main wing side?", "type": "count", "expected_mode": "aggregate", "must_include": ["11"], "note": "11 distinct main-rib stations per side on the standard wing config (figure 'Wing Structure Assembly', pp101/103). A naive count reads 14 by mixing in the long-range config and treating un-normalized station strings ('100'/'100.00'/'100.50') as distinct positions." },
 
     { "question": "List all adhesives used.", "type": "list", "expected_mode": "aggregate", "must_include": ["EC2216B/A", "EC880", "EC776"], "note": "adhesives on the materials page (p72-73)" },
     { "question": "List all sealants used.", "type": "list", "expected_mode": "aggregate", "must_include": ["576.1", "579.6", "EC1239A-B"], "note": "extruded/catalytic sealants on p72" },

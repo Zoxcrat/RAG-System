@@ -70,7 +70,7 @@ def is_aggregation_query(query: str) -> bool:
 # --- text-to-SQL -----------------------------------------------------------
 
 # Data dictionary + measure-selection rules + adaptable patterns, so the model
-# generalizes beyond the three challenge questions rather than hard-coding SQL.
+# generalizes to new questions rather than hard-coding SQL per known question.
 _SQL_SYSTEM = (
     "Translate the question into ONE read-only PostgreSQL SELECT over this table:\n"
     f"  {PARTS_SCHEMA}\n"
