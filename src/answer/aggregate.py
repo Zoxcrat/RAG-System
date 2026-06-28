@@ -4,7 +4,7 @@ import re
 from src import config
 from src.openai_client import get_client as _get_client
 
-LLM_MODEL = config.AGG_MODEL  # stronger model for the SQL/structural reasoning
+LLM_MODEL = config.AGG_MODEL  # stronger model for SQL reasoning
 ROW_LIMIT = config.AGG_ROW_LIMIT
 SELF_CONSISTENCY = config.AGG_SELF_CONSISTENCY
 SAMPLE_TEMPERATURE = config.AGG_SAMPLE_TEMPERATURE
@@ -16,7 +16,7 @@ PARTS_SCHEMA = (
     "variant TEXT)"
 )
 
-# Reject anything that mutates state or chains a second statement.
+# Reject statements that mutate or chain.
 _FORBIDDEN = re.compile(
     r"\b(insert|update|delete|drop|alter|truncate|grant|revoke|create|copy|merge|into)\b",
     re.IGNORECASE,
@@ -34,13 +34,9 @@ def _chat(system: str, user: str, temperature: float = 0.0) -> str:
 
 # --- routing ---------------------------------------------------------------
 
-# Unambiguous aggregation cues. Routing is biased toward AGGREGATE on purpose:
-# the two failure modes are asymmetric. A lookup misrouted to aggregation
-# self-corrects (empty SQL -> ok=False -> semantic fallback), but an aggregation
-# question misrouted to lookup does not — it just retrieves a few chunks and
-# answers "not enough info". So when a clear counting/listing cue is present we
-# skip the LLM classifier entirely (it flakes exactly here, e.g. reading "how
-# many ribs per side" as a lookup).
+# Biased toward AGGREGATE: a lookup misrouted here self-corrects via fallback,
+# but an aggregation question misrouted to lookup just answers "not enough info".
+# A clear cue skips the LLM classifier, which flakes exactly on these.
 _AGG_CUE_RE = re.compile(
     r"\b(how many|how much|how often|number of|total (number|count|amount|quantity)|"
     r"count (of|the)|list (all|every|each|the)|all (the )?(adhesives|sealants|"
@@ -51,7 +47,7 @@ _AGG_CUE_RE = re.compile(
 
 
 def is_aggregation_query(query: str) -> bool:
-    """True if the question needs aggregation over the whole catalog vs. a lookup."""
+    """True if the question needs aggregation over the catalog vs. a single lookup."""
     if _AGG_CUE_RE.search(query):
         return True
     answer = _chat(
@@ -73,11 +69,8 @@ def is_aggregation_query(query: str) -> bool:
 
 # --- text-to-SQL -----------------------------------------------------------
 
-# A data dictionary (what the columns mean and contain) + the measure-selection
-# principle + two adaptable patterns, rather than one hard-coded SQL per known
-# question. The vocabulary (figure sections, material brands, usable_on codes)
-# lets the model scope and match questions it has not seen, not just the three
-# challenge ones.
+# Data dictionary + measure-selection rules + adaptable patterns, so the model
+# generalizes beyond the three challenge questions rather than hard-coding SQL.
 _SQL_SYSTEM = (
     "Translate the question into ONE read-only PostgreSQL SELECT over this table:\n"
     f"  {PARTS_SCHEMA}\n"
@@ -150,7 +143,7 @@ def generate_sql(query: str, temperature: float = 0.0) -> str:
         f"Question: {query}",
         temperature=temperature,
     )
-    # strip markdown fences the model may have added
+    # strip markdown fences
     sql = re.sub(r"```(?:sql)?", "", sql, flags=re.IGNORECASE).replace("```", "").strip()
     return sql
 
@@ -158,7 +151,7 @@ def generate_sql(query: str, temperature: float = 0.0) -> str:
 def is_safe_select(sql: str) -> bool:
     """Reject anything that isn't a single read-only SELECT over `parts`."""
     s = sql.strip().rstrip(";").strip()
-    if not s or ";" in s:  # single statement only
+    if not s or ";" in s:  # single statement
         return False
     if not re.match(r"(?is)^\s*(select|with)\b", s):
         return False
@@ -174,16 +167,9 @@ def _with_limit(sql: str, limit: int) -> str:
 
 
 def run_select(conn, sql: str) -> tuple[list[str], list[tuple]]:
-    """Execute the SELECT in its own read-only transaction.
-
-    Defensive about the connection's prior state: ``set_session`` cannot run
-    inside a transaction, and a preceding read on a shared connection may have
-    left one open, so roll that back first. Without this, a lookup-then-aggregate
-    sequence on one connection made every SQL candidate raise here and silently
-    fall back to the semantic path (an aggregation question answered "no info").
-    Always ends the transaction so the connection is left clean for the next use.
-    """
-    conn.rollback()  # discard any transaction the previous caller left open
+    """Execute the SELECT in its own read-only transaction."""
+    # set_session can't run inside a transaction, so clear any txn a prior caller left open.
+    conn.rollback()
     conn.set_session(readonly=True)
     try:
         with conn.cursor() as cur:
@@ -192,7 +178,7 @@ def run_select(conn, sql: str) -> tuple[list[str], list[tuple]]:
             rows = cur.fetchall()
         return columns, rows
     finally:
-        conn.rollback()  # close this read txn (even if it aborted) before restoring
+        conn.rollback()  # close this read txn (even if aborted) before restoring
         conn.set_session(readonly=False)
 
 
@@ -254,12 +240,7 @@ def _pages_from(columns: list[str], rows: list[tuple]) -> list[int]:
 
 
 def answer_aggregation(conn, query: str) -> dict:
-    """Answer an aggregation question with self-consistency over sampled SQL.
-
-    Samples several SQL candidates, runs each, and keeps the result the majority
-    agree on. ok=False (no safe query ran or empty consensus) tells the caller to
-    fall back to the semantic path.
-    """
+    """Answer an aggregation question via majority vote over sampled SQL; ok=False signals fallback."""
     from collections import Counter
 
     n = max(1, SELF_CONSISTENCY)
@@ -272,7 +253,7 @@ def answer_aggregation(conn, query: str) -> dict:
         sql = _with_limit(sql, ROW_LIMIT)
         try:
             columns, rows = run_select(conn, sql)
-        except Exception:  # noqa: BLE001 - a bad query just doesn't get a vote
+        except Exception:  # noqa: BLE001 - bad query just gets no vote
             continue
         runs.append((sql, columns, rows))
 

@@ -40,12 +40,7 @@ def _to_vector_literal(embedding: list[float]) -> str:
 
 
 def _content_hash(source: str, page_number: Optional[int], content: str) -> str:
-    """Dedup key for a chunk.
-
-    Includes source and page_number so identical boilerplate on different pages
-    stays as distinct, citable rows. Stable across re-ingestion, so ON CONFLICT
-    DO NOTHING keeps ingestion idempotent.
-    """
+    """Dedup key for a chunk; includes source and page so identical boilerplate stays citable per page."""
     key = "\x00".join([source, str(page_number), content])
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
@@ -56,11 +51,7 @@ def _records_from_text(text: str, source: str) -> list[ChunkRecord]:
 
 
 def _records_from_pages(pages: list[dict], source: str) -> list[ChunkRecord]:
-    """OCR'd pages -> chunk records.
-
-    Each page is chunked independently so no chunk spans two pages and each keeps
-    its page_number. chunk_index runs across the whole document.
-    """
+    """OCR'd pages -> chunk records, chunked per page so no chunk spans two pages."""
     records: list[ChunkRecord] = []
     chunk_index = 0
     for page in pages:
@@ -94,8 +85,7 @@ def _store_records(conn, records: list[ChunkRecord]) -> int:
     ]
 
     with conn.cursor() as cur:
-        # fetch=True collects RETURNING rows across all internal pages, so its
-        # length is an accurate new-row count; cur.rowcount only sees the last page.
+        # fetch=True collects RETURNING across all batches; cur.rowcount only sees the last.
         returned = execute_values(
             cur,
             """
@@ -133,9 +123,7 @@ if __name__ == "__main__":
         init_schema(conn)
         if len(sys.argv) > 1:
             # Usage: python -m src.ingestion.ingest <pages.json> [source_name]
-            # One command rebuilds the full serving state from the cached artifacts
-            # (OCR json + vision json): the documents retrieval table and the
-            # structured parts table, both kept in sync with the vision extraction.
+            # Rebuilds documents + parts tables from the cached OCR/vision artifacts.
             from src.ingestion.pdf_loader import load_extracted_text
             from src.ingestion.vision_parts import (
                 ingest_part_cards,
@@ -146,9 +134,7 @@ if __name__ == "__main__":
             source = sys.argv[2] if len(sys.argv) > 2 else os.path.basename(json_path)
             pages = load_extracted_text(json_path)
 
-            # documents = flat-OCR prose chunks (narrative) + clean per-part cards
-            # rebuilt from the vision rows (lookups). Two complementary views of
-            # each page, fused at retrieval time.
+            # documents = flat-OCR prose chunks + clean per-part cards from the vision rows.
             n = ingest_pages(conn, pages, source)
             print(
                 f"Ingested {n} new OCR chunks from {json_path} "
@@ -157,8 +143,7 @@ if __name__ == "__main__":
             n_cards = ingest_part_cards(conn, ocr_path=json_path)
             print(f"Added {n_cards} new structured part-card chunks")
 
-            # parts = rebuilt from the vision extraction (recovers units_per_assy,
-            # usable_on and station that flat OCR destroys), not a line parser.
+            # parts = rebuilt from the vision extraction, recovering columns flat OCR destroys.
             n_parts = ingest_parts_from_vision(conn, ocr_path=json_path)
             print(f"Loaded {n_parts} parts from the vision extraction")
         else:

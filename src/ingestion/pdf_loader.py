@@ -40,11 +40,7 @@ def _check_tesseract_available() -> None:
 
 
 def _render_page_to_image(page: "fitz.Page", dpi: int) -> Image.Image:
-    """Render a PDF page to a PIL image at the requested DPI.
-
-    Goes through a PNG buffer so the conversion is correct regardless of the
-    page's color space or alpha channel.
-    """
+    """Render a PDF page to a PIL image at the requested DPI."""
     zoom = dpi / PDF_POINTS_PER_INCH
     matrix = fitz.Matrix(zoom, zoom)
     pixmap = page.get_pixmap(matrix=matrix)
@@ -57,10 +53,7 @@ def extract_pages_from_pdf(
     max_pages: Optional[int] = None,
     lang: str = "eng",
 ) -> list[ExtractedPage]:
-    """Render each page of ``pdf_path`` and OCR it into plain text.
-
-    A page whose OCR fails contributes empty text instead of aborting the run.
-    """
+    """Render each page of ``pdf_path`` and OCR it into plain text; a failed page yields empty text."""
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
@@ -75,7 +68,6 @@ def extract_pages_from_pdf(
             page_number = page_index + 1
             print(f"Processing page {page_number}/{num_pages}...")
 
-            # Isolate per page so one bad page doesn't abort the run.
             try:
                 image = _render_page_to_image(doc[page_index], dpi)
                 text = pytesseract.image_to_string(image, lang=lang).strip()

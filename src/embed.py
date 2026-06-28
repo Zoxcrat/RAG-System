@@ -13,8 +13,8 @@ def embed_text(text: str) -> list[float]:
 def embed_texts(texts: list[str]) -> list[list[float]]:
     """Embed many texts, batching to stay within the API's per-request limit.
 
-    Each response index is batch-relative, so we sort within the batch and append
-    in batch order to preserve global input order.
+    Response indices are batch-relative, so sort within each batch and append in
+    batch order to preserve global input order.
     """
     if not texts:
         return []

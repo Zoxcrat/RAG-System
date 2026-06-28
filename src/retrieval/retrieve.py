@@ -39,24 +39,16 @@ def retrieve(conn, query: str, top_k: int = DEFAULT_TOP_K) -> list[dict]:
             (vec, top_k),
         )
         rows = cur.fetchall()
-    # Close the implicit read transaction so the connection isn't left idle-in-
-    # transaction (which would break a later set_session in the aggregation path
-    # and holds locks under a connection pool).
-    conn.rollback()
+    conn.rollback()  # don't leave the connection idle-in-transaction after a read
 
     return [_row_to_dict(row, float(row[5])) for row in rows]
 
 
 def _keyword_search(conn, query: str, limit: int) -> list[dict]:
-    """Lexical arm: Postgres full-text search over the generated ``tsv`` column.
-
-    distance is None: a keyword-only hit has no cosine distance, and the relevance
-    gate stays vector-based.
-    """
+    """Lexical arm: Postgres full-text search over the generated ``tsv`` column."""
     with conn.cursor() as cur:
-        # Rewrite the default AND into OR: 500-char chunking can split a generic
-        # term from the specific one, and AND would miss those. ts_rank still
-        # ranks chunks matching more terms higher.
+        # Rewrite the default AND into OR so chunking that splits terms still matches;
+        # ts_rank still ranks chunks matching more terms higher.
         cur.execute(
             """
             WITH q AS (
@@ -88,9 +80,8 @@ def reciprocal_rank_fusion(
 ) -> list[dict]:
     """Fuse ranked lists via Reciprocal Rank Fusion: score = sum(1 / (rrf_k + rank)).
 
-    Uses ranks only, so it combines arms with incomparable scores (cosine vs
-    ts_rank) without normalization. Keyed by id, keeping the variant that carries
-    a cosine distance for the downstream relevance gate.
+    Rank-only, so it combines incomparable scores (cosine vs ts_rank) without
+    normalization. Keyed by id, keeping the variant with a cosine distance for the gate.
     """
     scores: dict = {}
     payload: dict = {}
@@ -113,10 +104,7 @@ def retrieve_hybrid(
     top_k: int = DEFAULT_TOP_K,
     candidates: int = RETRIEVAL_CANDIDATES,
 ) -> list[dict]:
-    """Hybrid retrieval: fuse the vector and keyword arms with RRF into top_k.
-
-    Rescues facts that are semantically buried but lexically present, and vice versa.
-    """
+    """Hybrid retrieval: fuse the vector and keyword arms with RRF into top_k."""
     vector_results = _vector_search(conn, query, candidates)
     keyword_results = _keyword_search(conn, query, candidates)
     return reciprocal_rank_fusion([vector_results, keyword_results], top_k)

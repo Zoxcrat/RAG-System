@@ -27,9 +27,8 @@ def _build_rerank_prompt(query: str, chunks: list[dict]) -> tuple[str, str]:
 def _parse_ranking(text: str, n: int) -> list[int]:
     """Parse the model's reply into a full 0-based permutation of range(n).
 
-    Tolerant: keeps valid in-range integers in order without duplicates, then
-    appends any omitted passage in its original position, so a malformed ranking
-    can never drop a candidate.
+    Keeps in-range integers in order without duplicates, then appends any omitted
+    passage in its original position, so a malformed ranking never drops a candidate.
     """
     match = re.search(r"\[[^\]]*\]", text)
     source = match.group(0) if match else text

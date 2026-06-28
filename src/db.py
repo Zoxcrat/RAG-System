@@ -27,12 +27,7 @@ _pool: Optional[ThreadedConnectionPool] = None
 
 
 def get_pool() -> ThreadedConnectionPool:
-    """Lazily-built connection pool for the API.
-
-    FastAPI serves sync endpoints from a thread pool, so a thread-safe pool lets
-    concurrent requests reuse a bounded set of connections instead of opening one
-    per request (which storms Postgres and exhausts its connection slots).
-    """
+    """Lazily-built thread-safe connection pool for the API."""
     global _pool
     if _pool is None:
         _pool = ThreadedConnectionPool(
@@ -42,7 +37,7 @@ def get_pool() -> ThreadedConnectionPool:
 
 
 def close_pool() -> None:
-    """Close all pooled connections on shutdown. No-op if the pool was never built."""
+    """Close all pooled connections on shutdown."""
     global _pool
     if _pool is not None:
         _pool.closeall()
@@ -66,12 +61,9 @@ def init_schema(conn):
             );
             """
         )
-        # Migrations for columns added after the table first shipped.
         cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash TEXT;")
         cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS page_number INTEGER;")
-        # Full-text vector for hybrid retrieval. Strip OCR noise chars (~ = | `) first:
-        # left in, they corrupt tokenization ('~headliner' never matches 'headliner').
-        # Hyphens are kept so part numbers like 0512029-8 index both whole and split.
+        # Strip OCR noise chars (~ = | `) before tokenizing; keep hyphens so part numbers index whole and split.
         cur.execute(
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS tsv tsvector "
             "GENERATED ALWAYS AS "
@@ -85,23 +77,21 @@ def init_schema(conn):
             USING hnsw (embedding vector_cosine_ops);
             """
         )
-        # GIN index for fast @@ full-text matching.
         cur.execute(
             """
             CREATE INDEX IF NOT EXISTS documents_tsv_gin_idx
             ON documents USING GIN (tsv);
             """
         )
-        # Dedup key making re-ingestion idempotent (paired with ON CONFLICT in ingest.py).
+        # Dedup key for idempotent re-ingestion (paired with ON CONFLICT in ingest.py).
         cur.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS documents_content_hash_uidx
             ON documents (content_hash);
             """
         )
-        # Structured parts table for aggregation queries. One row per catalog part
-        # line. Built from vision-LLM page extraction (see src/ingestion/vision_parts.py),
-        # which recovers the columns flat OCR destroys (units, usable-on, station).
+        # Structured parts table for aggregation queries; one row per catalog part line.
+        # Built from vision-LLM extraction (src/ingestion/vision_parts.py).
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS parts (
@@ -113,17 +103,14 @@ def init_schema(conn):
             );
             """
         )
-        # Schema v2 columns (the structural signals flat OCR loses). Added to
-        # pre-existing tables idempotently, same policy as the documents table.
+        # Schema v2 columns: structural signals flat OCR loses.
         cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS units_per_assy INTEGER;")
         cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS usable_on TEXT;")
         cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS station TEXT;")
         cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS index_no TEXT;")
-        # Schema v3: typed columns derived once at ingest from the free-text fields
-        # (see src/ingestion/normalize.py). Aggregation groups on these instead of
-        # re-deriving them with ILIKE in every generated SQL. station_num collapses
-        # OCR/format variants of a station; variant separates the standard wing from
-        # the long-range one (the rib over-count came from mixing them).
+        # Schema v3: typed columns derived once at ingest (src/ingestion/normalize.py) so
+        # aggregation groups on them instead of re-deriving with ILIKE. variant separates
+        # standard wing from long-range (mixing them caused the rib over-count).
         cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS station_num DOUBLE PRECISION;")
         cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS side TEXT;")
         cur.execute("ALTER TABLE parts ADD COLUMN IF NOT EXISTS part_category TEXT;")

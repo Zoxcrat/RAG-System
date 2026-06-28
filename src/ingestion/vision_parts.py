@@ -1,10 +1,7 @@
 """Vision-LLM extraction of the structured `parts` table.
 
-Flat OCR linearizes the IPC's 2-D table and destroys the UNITS-PER-ASSY and
-USABLE-ON columns (dotted leaders become noise). This module renders each page
-and asks a vision model to return full rows as JSON, recovering the columns
-aggregation needs. Runs through the Batch API (50% cheaper) and caches per page,
-so a re-run only processes pages not already done (idempotent and resumable).
+Flat OCR destroys the IPC's 2-D columns (UNITS-PER-ASSY, USABLE-ON); render each
+page and ask a vision model for full rows as JSON. Batch API, cached per page.
 """
 import base64
 import json
@@ -28,9 +25,7 @@ POLL_SECONDS = 20
 DEFAULT_PDF = "data/Cessna 172 Parts Catalog (1963-1974).pdf"
 DEFAULT_CACHE = "data/cessna_172_parts_vision.json"
 DEFAULT_OCR = "data/cessna_172_ocr.json"
-# Source tag for the structured chunks fed into the `documents` retrieval table,
-# kept distinct from the flat-OCR source so the two representations never collide
-# on content_hash and stay individually traceable.
+# Distinct from the flat-OCR source so the two representations never collide on content_hash.
 CARDS_SOURCE = "cessna_172_parts_vision"
 
 SYSTEM = (
@@ -59,11 +54,7 @@ def _get_client() -> anthropic.Anthropic:
 
 
 def render_jpeg_b64(pdf_path: str, page_number: int) -> str:
-    """Render a 1-based page to a base64 JPEG, long edge clamped to LONG_EDGE.
-
-    JPEG (not PNG) keeps the Batch API submission well under its size cap while
-    staying legible for the small part-number digits.
-    """
+    """Render a 1-based page to a base64 JPEG, long edge clamped to LONG_EDGE."""
     with fitz.open(pdf_path) as doc:
         page = doc[page_number - 1]
         zoom = LONG_EDGE / max(page.rect.width, page.rect.height)
@@ -72,9 +63,7 @@ def render_jpeg_b64(pdf_path: str, page_number: int) -> str:
     return base64.b64encode(data).decode()
 
 
-# 'SEE FIG 11' rows are cross-references — the part is enumerated in another
-# figure, not here. They carry no real part number, unit or category, so in the
-# parts table they would corrupt 'list all' and COUNT(DISTINCT part_number).
+# 'SEE FIG 11' rows are cross-references, not real parts — they'd corrupt counts.
 _PLACEHOLDER_PN_RE = re.compile(r"^\s*SEE\b", re.IGNORECASE)
 
 
@@ -87,7 +76,6 @@ def is_real_part_number(pn: Optional[str]) -> bool:
 def _parse_rows(text: str) -> list[dict]:
     text = re.sub(r"```(?:json)?", "", text).replace("```", "").strip()
     rows = json.loads(text).get("rows", [])
-    # Drop header bleed / junk: a row is only useful with a real part number.
     return [r for r in rows if is_real_part_number(r.get("part_number"))]
 
 
@@ -178,12 +166,9 @@ _FIG_RE = re.compile(r"Figure\s+(\d+[A-Z]?)\.?\s+(.+)", re.IGNORECASE)
 
 
 def page_figure_map(ocr_path: str) -> dict[int, str]:
-    """Map page_number -> figure/section caption, carried forward from OCR.
+    """Map page_number -> figure/section caption from the OCR 'Figure N.' headers.
 
-    The vision rows carry no figure caption (the model returns table rows, not
-    headings); the OCR text has the readable 'Figure N. <caption>' headers. We
-    scan pages in order and assign each page the most recent caption, giving the
-    parts table a section column for scoping ('wing', 'fuselage', ...).
+    Vision rows carry no caption, so assign each page the most recent one seen.
     """
     with open(ocr_path, encoding="utf-8") as f:
         pages = json.load(f)
@@ -202,11 +187,8 @@ def page_figure_map(ocr_path: str) -> dict[int, str]:
 def _card_text(row: dict, figure: Optional[str]) -> str:
     """A clean, self-contained sentence describing one catalog part.
 
-    Flat OCR stores this line mangled and interleaved with its neighbours
-    ('0512017-1 SHELF-RADIO' buried between 'NUTPLATE —' and 'ATTACHING PARTS'),
-    so its embedding never matches a natural-language part query. Rebuilt from the
-    vision row, the chunk carries the part number, description and its section
-    context together (contextual retrieval), which is what the lookup path needs.
+    Carries part number, description and section context together so the chunk
+    embeds well for natural-language part queries (flat OCR mangles this line).
     """
     pn = (row.get("part_number") or "").strip()
     desc = (row.get("description") or "").strip()
@@ -224,13 +206,9 @@ def _card_text(row: dict, figure: Optional[str]) -> str:
 
 def ingest_part_cards(conn, cache_path: str = DEFAULT_CACHE,
                       ocr_path: str = DEFAULT_OCR) -> int:
-    """Add clean per-part chunks (from the vision rows) to the `documents` table.
+    """Add clean per-part chunks (from the vision rows) to `documents`. Returns new rows.
 
-    Additive to the flat-OCR chunks, not a replacement: OCR keeps the running
-    prose (intro notes, narrative) that a parts row has no equivalent for, while
-    these cards give the semantic path a noise-free representation of every part
-    line. Reuses the ingest store (batch embed + content_hash dedup), so it is
-    idempotent. Returns the number of new chunks inserted.
+    Additive to the flat-OCR chunks, not a replacement.
     """
     from src.ingestion.ingest import _store_records
 
@@ -251,9 +229,8 @@ def ingest_parts_from_vision(conn, cache_path: str = DEFAULT_CACHE,
                              ocr_path: str = DEFAULT_OCR) -> int:
     """Rebuild the `parts` table from the cached vision rows. Returns row count.
 
-    Derives the typed columns (station_num, side, part_category, sub_type, variant)
-    from each row's free text at load time (see src/ingestion/normalize.py), so the
-    aggregation SQL groups on clean columns instead of re-deriving them per query.
+    Derives the typed columns at load time (see normalize.classify) so aggregation
+    SQL groups on clean columns instead of re-deriving them per query.
     """
     from psycopg2.extras import execute_values
 
@@ -277,7 +254,7 @@ def ingest_parts_from_vision(conn, cache_path: str = DEFAULT_CACHE,
                 pn,
                 description,
                 page,
-                figure,  # section caption carried forward from OCR (page_figure_map)
+                figure,
                 qty if isinstance(qty, int) else None,
                 (r.get("usable_on") or None),
                 station,

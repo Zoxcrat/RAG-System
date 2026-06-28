@@ -21,7 +21,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Aviation Parts RAG API", version="0.1.0", lifespan=lifespan)
 
-# In dev the React app runs on a different port, so allow cross-origin explicitly.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,

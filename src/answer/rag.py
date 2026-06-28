@@ -54,11 +54,7 @@ def _min_distance(chunks: list[dict]) -> Optional[float]:
 
 
 def _pages_used(chunks: list[dict]) -> list[int]:
-    """Unique, sorted page numbers offered as context (NULL pages skipped).
-
-    The exact pages the model cites are parsed from the answer's [page N] tokens
-    by the caller/frontend.
-    """
+    """Unique, sorted page numbers offered as context (NULL pages skipped)."""
     return sorted(
         {chunk["page_number"] for chunk in chunks if chunk.get("page_number") is not None}
     )
@@ -103,8 +99,7 @@ def generate_answer(query: str, chunks: list[dict]) -> str:
 
 
 def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
-    # Route aggregation questions to the parts table via text-to-SQL; the semantic
-    # path below only sees top_k chunks.
+    # Route aggregation questions to the parts table via text-to-SQL.
     if AGG_ENABLED and is_aggregation_query(query):
         agg = answer_aggregation(conn, query)
         # Fall through to semantic retrieval if SQL returned no rows.
@@ -119,8 +114,8 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
                 "sql": agg.get("sql"),
             }
 
-    # Retrieve a wider candidate set, then rerank down to top_k. The relevance gate
-    # runs on candidates first, so an out-of-domain query is refused before reranking.
+    # Retrieve a wider candidate set, then rerank down to top_k. Gate on candidates
+    # first so out-of-domain queries are refused before reranking.
     candidates = retrieve_hybrid(conn, query, top_k=RERANK_CANDIDATES)
     min_dist = _min_distance(candidates)
     relevant = min_dist is not None and min_dist <= RELEVANCE_THRESHOLD
@@ -155,7 +150,7 @@ def ask(conn, query: str, top_k: int = DEFAULT_TOP_K) -> dict:
 
 
 if __name__ == "__main__":
-    # First two match the sample docs; the third is off-topic on purpose.
+    # First two match the sample docs; the third is off-topic.
     queries = [
         "What is PGVector and what is it used for?",
         "How does retrieval-augmented generation work?",
